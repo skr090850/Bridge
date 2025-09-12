@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart';
+import 'login_screen.dart';
+import 'dashboard_screen.dart';
+import 'projects/project_screen.dart';
+import 'projects/project_detail_screen.dart';
+import 'members/members_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,26 +15,30 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Bridge App',
       theme: ThemeData(
-        primarySwatch: Colors.orange,
-        scaffoldBackgroundColor: Colors.white,
+        primarySwatch: Colors.cyan,
+        scaffoldBackgroundColor: Colors.grey[100],
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
+          backgroundColor: Color(0xFF00A3D7),
           elevation: 0,
-          iconTheme: IconThemeData(color: Colors.black),
           titleTextStyle: TextStyle(
-              color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          selectedItemColor: Colors.orange,
-          unselectedItemColor: Colors.grey,
-          backgroundColor: Colors.white,
-        ),
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+          iconTheme: IconThemeData(color: Colors.white)
+        )
       ),
-      home: const LoginScreen(),
-      debugShowCheckedModeBanner: false,
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const LoginScreen(),
+        '/dashboard': (context) => const DashboardScreen(),
+        '/project': (context) => const ProjectScreen(),
+        '/projectDetail': (context) => ProjectDetailScreen(),
+        '/members': (context) => const MembersScreen(),
+      },
     );
   }
 }
-
