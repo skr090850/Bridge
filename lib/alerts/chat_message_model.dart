@@ -16,7 +16,6 @@ class ChatMessage {
   factory ChatMessage.fromJson(Map<String, dynamic> json, int currentUserId) {
     final int senderId = json['senderId'] ?? 0;
     
-    // API se aa rahe timestamp ko format kiya gaya hai
     String formattedTime = 'N/A';
     if (json['timestamp'] != null) {
       try {

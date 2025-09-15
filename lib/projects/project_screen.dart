@@ -27,7 +27,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
       final String userRole = arguments['userRole'];
       _projectsFuture = _fetchProjects(userId, userRole);
     } else {
-      // Fallback for testing, agar arguments na milein
       _projectsFuture = _fetchProjects(1000, 'sysadmin');
     }
   }
@@ -35,7 +34,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
   Future<List<Project>> _fetchProjects(int userId, String userRole) async {
     String apiUrl;
     
-    // User role ke hisaab se API URL chuna gaya hai
     if (userRole.toLowerCase() == 'sysadmin') {
       apiUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
     } else {
@@ -53,7 +51,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         
-        // Dono APIs ke response format ko handle karne ka logic
         if (responseData is Map<String, dynamic> &&
             responseData.containsKey('projects')) {
           final List<dynamic> projectsJson = responseData['projects'];

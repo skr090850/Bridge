@@ -19,24 +19,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Define the primary orange color for the theme
     const Color primaryOrange = Color(0xFFF27121);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bridge App',
-      // Apply the new, robust orange theme globally using ColorScheme
       theme: ThemeData(
-        // Use ColorScheme.fromSeed and explicitly set the primary color
         colorScheme: ColorScheme.fromSeed(
           seedColor: primaryOrange,
-          // This ensures your exact orange is used as the primary color
           primary: primaryOrange,
         ),
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
         
-        // Define styles for the app bar
         appBarTheme: const AppBarTheme(
           backgroundColor: primaryOrange,
           elevation: 0,
@@ -48,7 +43,6 @@ class MyApp extends StatelessWidget {
           iconTheme: IconThemeData(color: Colors.white)
         ),
 
-        // Define styles for elevated buttons
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryOrange,
@@ -61,14 +55,12 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // Define styles for text buttons
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: primaryOrange,
           ),
         ),
         
-        // Define styles for input fields
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -82,7 +74,6 @@ class MyApp extends StatelessWidget {
         ),
       ),
       initialRoute: '/',
-      // Your existing routes
       routes: {
         '/': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),

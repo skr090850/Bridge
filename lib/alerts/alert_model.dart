@@ -16,7 +16,6 @@ class Alert {
       id: json['id'] ?? 0,
       name: json['displayname'] ?? 'N/A',
       designation: json['position'] ?? 'Company, Designation',
-      // API se aa rahe 'Projects' count ko hum 'SMS' count ki tarah istemal kar rahe hain
       smsCount: json['Projects'] ?? 0,
     );
   }

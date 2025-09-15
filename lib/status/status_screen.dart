@@ -20,14 +20,12 @@ class _StatusScreenState extends State<StatusScreen> {
     _statusFuture = _fetchAllStatus();
   }
 
-  // Active aur Archive dono lists ko fetch karke ek list mein jodne ka logic
   Future<List<StatusModel>> _fetchAllStatus() async {
     try {
       final results = await Future.wait([
         _fetchProjectStatus(isArchived: false),
         _fetchProjectStatus(isArchived: true),
       ]);
-      // Dono lists ko ek saath jod diya gaya hai
       return [...results[0], ...results[1]];
     } catch (e) {
       debugPrint("Error fetching all statuses: $e");
@@ -60,7 +58,6 @@ class _StatusScreenState extends State<StatusScreen> {
           throw Exception('Unexpected JSON format from API');
         }
 
-        // Demo ke liye, pehle 3 projects ko active aur baaki ko archive maana gaya hai
         if (isArchived) {
            return projectsJson.skip(3).map((json) => StatusModel.fromJson(json, isArchived: true)).toList();
         } else {
@@ -85,9 +82,7 @@ class _StatusScreenState extends State<StatusScreen> {
       ),
       body: Column(
         children: [
-          // Upar status guide dikhane ka logic
           _buildLegendHeader(),
-          // Project list ka header
           _buildListHeader(),
           Expanded(
             child: FutureBuilder<List<StatusModel>>(
@@ -121,7 +116,6 @@ class _StatusScreenState extends State<StatusScreen> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Status ke hisaab se color box
                           Container(
                             width: 12, 
                             height: 12, 
@@ -160,7 +154,6 @@ class _StatusScreenState extends State<StatusScreen> {
     );
   }
 
-  // Status guide ke liye header
   Widget _buildLegendHeader() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -179,7 +172,6 @@ class _StatusScreenState extends State<StatusScreen> {
     );
   }
 
-  // Project list ke liye header
   Widget _buildListHeader() {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
     return Container(

@@ -32,7 +32,6 @@ class ProjectDetailScreen extends StatefulWidget {
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
-  // State variables ko manage karne ke liye
   late Future<Project> _projectDetailsFuture;
   late Future<List<Folder>> _foldersFuture;
   Future<List<FileModel>>? _filesFuture;
@@ -48,7 +47,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     _foldersFuture = _fetchFolders(widget.projectId);
   }
 
-  // API se project details fetch karne ka logic
   Future<Project> _fetchProjectDetails(int projectId) async {
     final String apiUrl =
         'http://183.82.115.221/Bridge/BridgeApi/api/Template/getproject?projid=$projectId';
@@ -64,7 +62,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // API se folders fetch karne ka logic
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
         'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId';
@@ -78,7 +75,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // API se files fetch aur filter karne ka logic
   Future<List<FileModel>> _fetchFiles(int projectId, int folderId) async {
     final String apiUrl =
         'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=$projectId';
@@ -95,7 +91,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // File download aur open karne ka logic
   Future<void> _handleFileTap(int fileId, String fileName) async {
     setState(() {
       _isDownloading = true;
@@ -175,7 +170,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  // File type ke hisaab se custom image icon dene ka logic
   Widget _getIconForFile(String filename) {
     final extension = filename.split('.').last.toLowerCase();
     String imagePath;
@@ -228,7 +222,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       appBar: AppBar(title: Text(widget.projectTitle)),
       body: Column(
         children: [
-          // Upar ka DYNAMIC Hissa
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
@@ -238,7 +231,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             ),
           ),
 
-          // Neeche ka STATIC Hissa
           _buildFolderGridView(),
         ],
       ),
@@ -297,12 +289,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // Naya file list UI
   Widget _buildFileListView() {
     return Column(
       key: ValueKey(_selectedFolder!.id),
       children: [
-        // Folder ka header
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
           child: Row(
@@ -330,13 +320,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             ],
           ),
         ),
-        // Files ke table ka header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           color: Colors.grey[200],
           child: Row(
             children: [
-              const SizedBox(width: 40), // Icon ke liye space
+              const SizedBox(width: 40),
               const Expanded(
                 flex: 5,
                 child: Text(
@@ -363,7 +352,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             ],
           ),
         ),
-        // Files ki scrollable list
         Expanded(
           child: FutureBuilder<List<FileModel>>(
             future: _filesFuture,
@@ -435,10 +423,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  // Folders ka grid dikhane wala widget
   Widget _buildFolderGridView() {
     return Container(
-      height: 400, // Grid ki height ko fix kiya hai
+      height: 400,
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,

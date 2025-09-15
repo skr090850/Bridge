@@ -13,7 +13,7 @@ class AlertsScreen extends StatefulWidget {
 
 class _AlertsScreenState extends State<AlertsScreen> {
   late Future<List<Alert>> _alertsFuture;
-  int _currentUserId = 1000; // Default/fallback user ID
+  int _currentUserId = 1000;
 
   @override
   void didChangeDependencies() {
@@ -103,7 +103,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
                             style: const TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 16)),
                         onTap: () {
-                          // Chat screen par navigate karein, ab ID bhi pass ho raha hai
                           Navigator.push(
                             context,
                             MaterialPageRoute(

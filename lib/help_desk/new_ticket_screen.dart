@@ -25,7 +25,6 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
     _foldersFuture = _fetchFolders(widget.project.projectId);
   }
 
-  // Project ke folders fetch karne ka logic
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
         'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId';

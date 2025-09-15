@@ -17,7 +17,6 @@ class _HelpdeskScreenState extends State<HelpdeskScreen> {
   bool _isLoading = false;
   String _message = 'Search for a project to begin.';
 
-  // Project search karne ka logic
   Future<void> _searchProjects(String query) async {
     if (query.trim().isEmpty) {
       setState(() {
@@ -28,18 +27,15 @@ class _HelpdeskScreenState extends State<HelpdeskScreen> {
     }
     setState(() {
       _isLoading = true;
-      _message = ''; // Clear previous messages
+      _message = ''; 
     });
 
-    // NOTE: Yeh sysadmin ki project search API hai.
-    // User ke liye alag API ho sakti hai.
     const apiUrl =
         'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
-        // UserID 1000 hardcoded hai, aap ise login se pass kar sakte hain
         body: json.encode({'uid': 1000, 'skip': 0, 'take': 20, 'srch': query}),
       );
 
@@ -47,7 +43,6 @@ class _HelpdeskScreenState extends State<HelpdeskScreen> {
         final responseData = json.decode(response.body);
         List<dynamic> projectsJson;
 
-        // API se aa rahe alag-alag formats ko handle karne ka logic
         if (responseData is Map<String, dynamic> &&
             responseData.containsKey('projects')) {
           projectsJson = responseData['projects'];
