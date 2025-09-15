@@ -381,7 +381,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16.0,
-                          vertical: 8.0,
+                          vertical: 12.0,
                         ),
                         child: Row(
                           children: [
@@ -403,12 +403,23 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               ),
                             ),
                             Expanded(
-                              flex: 3,
-                              child: Text(
-                                file.dateModified,
-                                textAlign: TextAlign.right,
-                              ),
-                            ),
+                            flex: 3,
+                            child: isCurrentlyDownloading
+                                ? const Align(
+                                    alignment: Alignment.centerRight,
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    file.dateModified,
+                                    textAlign: TextAlign.right,
+                                  ),
+                          ),
                           ],
                         ),
                       ),
