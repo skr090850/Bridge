@@ -5,7 +5,6 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Get the primary color directly from the app's theme
     final Color primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
@@ -138,7 +137,6 @@ class DashboardScreen extends StatelessWidget {
               imagePath,
               height: 40,
               width: 40,
-              color: primaryColor,
             ),
             const SizedBox(height: 8),
             Text(
