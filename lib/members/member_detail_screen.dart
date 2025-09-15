@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -6,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'member_model.dart';
 import 'user_project_model.dart';
-import '../projects/project_detail_screen.dart'; // ProjectDetailScreen ko import kiya gaya hai
+import '../projects/project_detail_screen.dart';
 
 class MemberDetailScreen extends StatefulWidget {
   final int memberId;
@@ -147,18 +146,38 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                             fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        member.position,
+                        '${member.organization}, ${member.position}',
+                        textAlign: TextAlign.center,
                         style:
                             TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                       const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            member.email,
+                            style: const TextStyle(fontSize: 14, color: Colors.black),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text("|"),
+                          ),
+                          Text(
+                            member.workPhone,
+                            style: const TextStyle(fontSize: 14, color: Colors.black),
+                          ),
+                        ],
+                      ),
                       Text(
-                        member.email,
+                        member.address,
+                        textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 14, color: Colors.black),
                       ),
                     ],
                   ),
                 ),
+
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -219,9 +238,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
       itemCount: projects.length,
       itemBuilder: (context, index) {
         final project = projects[index];
-        return InkWell( // Project row ko tappable banaya gaya hai
+        return InkWell(
           onTap: () {
-            // ProjectDetailScreen par navigate karne ka logic
             Navigator.push(
               context,
               MaterialPageRoute(
