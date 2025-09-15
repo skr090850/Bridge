@@ -10,8 +10,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController = TextEditingController(text: 'sysadmin');
-  final TextEditingController _passwordController = TextEditingController(text: 'admin');
+  final TextEditingController _usernameController =
+      TextEditingController(text: 'sysadmin');
+  final TextEditingController _passwordController =
+      TextEditingController(text: 'admin');
   bool _isLoading = false;
 
   Future<void> _login() async {
@@ -19,7 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    const String apiUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/getLogin';
+    const String apiUrl =
+        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/getLogin';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -29,56 +32,60 @@ class _LoginScreenState extends State<LoginScreen> {
           'pwd': _passwordController.text,
         }),
       );
-      
+
       setState(() {
         _isLoading = false;
       });
 
       if (response.statusCode == 200) {
-        
         String responseBodyStr = response.body;
-        // if (responseBodyStr.startsWith('"') && responseBodyStr.endsWith('"')) {
-        //   responseBodyStr = responseBodyStr.substring(1, responseBodyStr.length - 1);
-        // }
-        // responseBodyStr = responseBodyStr.replaceAll(r'\"', '"');
-
         final decodedResponse = json.decode(responseBodyStr);
 
-        if (decodedResponse is Map<String, dynamic> && decodedResponse['status'] == '0') {
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Login Successful')),
-          );
+        if (decodedResponse is Map<String, dynamic> &&
+            decodedResponse['status'] == '0') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Login Successful'),
+                  backgroundColor: Colors.green),
+            );
 
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted) {
-              Navigator.pushReplacementNamed(context, '/dashboard');
-            }
-          });
-
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted) {
+                Navigator.pushReplacementNamed(context, '/dashboard');
+              }
+            });
+          }
         } else {
-          
-          String errorMessage = "Invalid username or password";
-          // if (decodedResponse is Map<String, dynamic> && decodedResponse.containsKey('message')) {
-          //     errorMessage = decodedResponse['message'];
-          // }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text("Invalid username or password"),
+                  backgroundColor: Colors.red),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(errorMessage)),
+            SnackBar(
+                content:
+                    Text('Login Failed. Server error: ${response.statusCode}'),
+                backgroundColor: Colors.red),
           );
         }
-
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login Failed. Server error: ${response.statusCode}')),
-        );
       }
     } catch (e) {
-       setState(() {
+      setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('An error occurred: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('An error occurred: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -91,74 +98,50 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                'BRIDGE',
+              Text(
+                'Bridge',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 48,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF00A3D7),
+                  fontFamily: 'serif',
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+              const SizedBox(height: 50),
+              TextFormField(
+                controller: _usernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
               const SizedBox(height: 40),
-              Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _usernameController,
-                        decoration: InputDecoration(
-                          labelText: 'Username',
-                          prefixIcon: const Icon(Icons.person_outline),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _login,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00A3D7),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _isLoading
-                              ? const CircularProgressIndicator(color: Colors.white)
-                              : const Text('Login', style: TextStyle(fontSize: 18, color: Colors.white)),
-                        ),
-                      ),
-                    ],
-                  ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 3))
+                      : const Text('Login', style: TextStyle(fontSize: 18)),
                 ),
               ),
               const SizedBox(height: 20),
               TextButton(
                 onPressed: () {},
-                child: const Text(
-                  'Forgot Password?',
-                  style: TextStyle(color: Color(0xFF00A3D7)),
-                ),
+                child: const Text('Forgot Password?'),
               ),
             ],
           ),
@@ -167,3 +150,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
