@@ -56,7 +56,7 @@ class _DocViewerScreenState extends State<DocViewerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.fileName),
-        backgroundColor: const Color(0xFF00A3D7),
+        backgroundColor: Theme.of(context).colorScheme.primary,
       ),
       body: Stack(
         children: [

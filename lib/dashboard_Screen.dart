@@ -107,8 +107,8 @@ class DashboardScreen extends StatelessWidget {
             label: 'Issues',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.sync_alt),
-            label: 'Sync',
+            icon: Icon(Icons.qr_code_scanner),
+            label: 'Scan',
           ),
            BottomNavigationBarItem(
             icon: Icon(Icons.notifications_none),

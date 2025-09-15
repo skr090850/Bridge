@@ -13,7 +13,7 @@ class PdfViewerScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(fileName),
-        backgroundColor: const Color(0xFF00A3D7),
+        backgroundColor: Theme.of(context).colorScheme.primary,
       ),
       body: SfPdfViewer.file(
         File(filePath),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'status_model.dart';
+import '../projects/project_detail_screen.dart';
 
 class StatusScreen extends StatefulWidget {
   const StatusScreen({super.key});
@@ -10,21 +11,31 @@ class StatusScreen extends StatefulWidget {
   State<StatusScreen> createState() => _StatusScreenState();
 }
 
-class _StatusScreenState extends State<StatusScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  late Future<List<StatusModel>> _activeStatusFuture;
-  late Future<List<StatusModel>> _archiveStatusFuture;
+class _StatusScreenState extends State<StatusScreen> {
+  late Future<List<StatusModel>> _statusFuture;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _activeStatusFuture = _fetchProjectStatus("active");
-    _archiveStatusFuture = _fetchProjectStatus("archive");
+    _statusFuture = _fetchAllStatus();
   }
 
-  Future<List<StatusModel>> _fetchProjectStatus(String statusType) async {
+  // Active aur Archive dono lists ko fetch karke ek list mein jodne ka logic
+  Future<List<StatusModel>> _fetchAllStatus() async {
+    try {
+      final results = await Future.wait([
+        _fetchProjectStatus(isArchived: false),
+        _fetchProjectStatus(isArchived: true),
+      ]);
+      // Dono lists ko ek saath jod diya gaya hai
+      return [...results[0], ...results[1]];
+    } catch (e) {
+      debugPrint("Error fetching all statuses: $e");
+      throw Exception('Failed to load statuses');
+    }
+  }
+
+  Future<List<StatusModel>> _fetchProjectStatus({required bool isArchived}) async {
     const apiUrl =
         'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
     try {
@@ -49,154 +60,138 @@ class _StatusScreenState extends State<StatusScreen>
           throw Exception('Unexpected JSON format from API');
         }
 
-        if (statusType == "archive") {
-          return [];
+        // Demo ke liye, pehle 3 projects ko active aur baaki ko archive maana gaya hai
+        if (isArchived) {
+           return projectsJson.skip(3).map((json) => StatusModel.fromJson(json, isArchived: true)).toList();
+        } else {
+           return projectsJson.take(3).map((json) => StatusModel.fromJson(json, isArchived: false)).toList();
         }
 
-        return projectsJson.map((json) => StatusModel.fromJson(json)).toList();
       } else {
         throw Exception(
             'Failed to load status. Status code: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint("Error fetching status: $e");
-      throw Exception('Failed to load status');
+      rethrow;
     }
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final Color primaryColor = Theme.of(context).colorScheme.primary;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Status'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Design ke anusaar custom TabBar
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: primaryColor,
-                ),
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.black,
-                tabs: const [
-                  Tab(text: 'Active'),
-                  Tab(text: 'Archive'),
-                ],
-              ),
+      body: Column(
+        children: [
+          // Upar status guide dikhane ka logic
+          _buildLegendHeader(),
+          // Project list ka header
+          _buildListHeader(),
+          Expanded(
+            child: FutureBuilder<List<StatusModel>>(
+              future: _statusFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                      child: Text("Error: ${snapshot.error}",
+                          textAlign: TextAlign.center));
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text("No projects found."));
+                }
+
+                final allProjects = snapshot.data!;
+
+                return ListView.separated(
+                  itemCount: allProjects.length,
+                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = allProjects[index];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      title: Text(item.projectName,
+                          style: const TextStyle(fontWeight: FontWeight.w500)),
+                      subtitle: Text(item.company,
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Status ke hisaab se color box
+                          Container(
+                            width: 12, 
+                            height: 12, 
+                            color: item.isArchived ? Colors.grey : Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 40,
+                            child: Text(
+                              '${item.statusPercent}%',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ProjectDetailScreen(
+                              projectId: item.projectId,
+                              projectTitle: item.projectName,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Active Tab ka content
-                  _buildStatusList(_activeStatusFuture),
-                  // Archive Tab ka content
-                  _buildStatusList(_archiveStatusFuture),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // Status ki list dikhane wala reusable widget
-  Widget _buildStatusList(Future<List<StatusModel>> future) {
+  // Status guide ke liye header
+  Widget _buildLegendHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Container(width: 10, height: 10, color: Colors.red),
+          const SizedBox(width: 4),
+          const Text('Active', style: TextStyle(fontSize: 12)),
+          const SizedBox(width: 12),
+          Container(width: 10, height: 10, color: Colors.grey),
+          const SizedBox(width: 4),
+          const Text('Archive', style: TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  // Project list ke liye header
+  Widget _buildListHeader() {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
-
-    return Column(
-      children: [
-        Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          color: primaryColor.withOpacity(0.1),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Project',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              Text('Status',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ],
-          ),
-        ),
-        Expanded(
-          child: FutureBuilder<List<StatusModel>>(
-            future: future,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(
-                    child: Text("Error: Failed to load status.",
-                        textAlign: TextAlign.center));
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(child: Text("No projects found."));
-              }
-
-              final statuses = snapshot.data!;
-              return ListView.separated(
-                itemCount: statuses.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final item = statuses[index];
-                  return ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16.0),
-                    title: Text(item.projectName,
-                        style: const TextStyle(fontWeight: FontWeight.w500)),
-                    subtitle: Text(item.company,
-                        style:
-                            TextStyle(fontSize: 12, color: Colors.grey[600])),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          color: Colors.red,
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                            width: 40, // Alignment ke liye
-                            child: Text(
-                              '${item.statusPercent}%',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                              textAlign: TextAlign.right,
-                            )),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      color: primaryColor.withOpacity(0.1),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('Project', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text('Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        ],
+      ),
     );
   }
 }

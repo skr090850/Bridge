@@ -46,7 +46,7 @@ class _TextViewerScreenState extends State<TextViewerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.fileName),
-        backgroundColor: const Color(0xFF00A3D7),
+        backgroundColor: Theme.of(context).colorScheme.primary,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
