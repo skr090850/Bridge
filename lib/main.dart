@@ -1,3 +1,5 @@
+import 'package:bridge/alerts/alert_screen.dart';
+import 'package:bridge/status/status_screen.dart';
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
@@ -5,6 +7,7 @@ import 'projects/project_screen.dart';
 import 'projects/project_detail_screen.dart';
 import 'members/members_screen.dart';
 import 'members/member_detail_screen.dart';
+import 'help_desk/help_desk_screen.dart';
 
 
 void main() {
@@ -86,6 +89,9 @@ class MyApp extends StatelessWidget {
         '/project': (context) => const ProjectScreen(),
         // '/projectDetail': (context) => ProjectDetailScreen(),
         '/members': (context) => const MembersScreen(),
+        '/alerts':(context) => const AlertsScreen(),
+        '/helpdesk':(context) => const HelpdeskScreen(),
+        '/status':(context) => const StatusScreen(),
       },
     );
   }

@@ -1,144 +1,500 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:flutter_html/flutter_html.dart';
-import 'project_model.dart';
-import 'folder_model.dart';
-import 'file_list_screen.dart';
+
+import 'model/project_model.dart';
+import 'model/folder_model.dart';
+import 'model/file_model.dart';
+
+import 'viewers/doc_viewer_screen.dart';
+import 'viewers/pdf_viewer_screen.dart';
+import 'viewers/epub_viewer_screen.dart';
+import 'viewers/text_viewer_screen.dart';
+import 'viewers/image_viewer_screen.dart';
+import 'viewers/xlsx_viewer_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
-  final Project project;
+  final int projectId;
+  final String projectTitle;
 
-  const ProjectDetailScreen({super.key, required this.project});
+  const ProjectDetailScreen({
+    super.key,
+    required this.projectId,
+    required this.projectTitle,
+  });
 
   @override
   State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
+  // State variables ko manage karne ke liye
+  late Future<Project> _projectDetailsFuture;
   late Future<List<Folder>> _foldersFuture;
+  Future<List<FileModel>>? _filesFuture;
+  Folder? _selectedFolder;
+
+  bool _isDownloading = false;
+  String _downloadingFileName = '';
 
   @override
   void initState() {
     super.initState();
-    _foldersFuture = _fetchFolders(widget.project.projectId);
+    _projectDetailsFuture = _fetchProjectDetails(widget.projectId);
+    _foldersFuture = _fetchFolders(widget.projectId);
   }
 
+  // API se project details fetch karne ka logic
+  Future<Project> _fetchProjectDetails(int projectId) async {
+    final String apiUrl =
+        'http://183.82.115.221/Bridge/BridgeApi/api/Template/getproject?projid=$projectId';
+    final response = await http.get(Uri.parse(apiUrl));
+    if (response.statusCode == 200) {
+      final dynamic body = json.decode(response.body);
+      final Map<String, dynamic> data = body is String
+          ? json.decode(body)
+          : body;
+      return Project.fromJson(data);
+    } else {
+      throw Exception('Failed to load project details');
+    }
+  }
+
+  // API se folders fetch karne ka logic
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
         'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId';
-    try {
-      final response = await http.get(Uri.parse(apiUrl));
-      if (response.statusCode == 200) {
-        final dynamic decodedBody = json.decode(response.body);
-        List<dynamic> data;
-        if (decodedBody is String) {
-          data = json.decode(decodedBody);
-        } else if (decodedBody is List) {
-          data = decodedBody;
-        } else {
-          throw Exception('Unexpected response format for folders');
-        }
-        
-        // Yeh line raw data ko console mein print karegi
-        debugPrint('RAW FOLDER DATA FROM API: $data');
-
-        return data.map((json) => Folder.fromJson(json)).toList();
-      } else {
-        throw Exception(
-            'Failed to load folders. Status code: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('An error occurred while fetching folders: $e');
-      throw Exception('An error occurred while fetching folder data.');
+    final response = await http.get(Uri.parse(apiUrl));
+    if (response.statusCode == 200) {
+      final dynamic body = json.decode(response.body);
+      final List<dynamic> data = body is String ? json.decode(body) : body;
+      return data.map((json) => Folder.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load folders');
     }
+  }
+
+  // API se files fetch aur filter karne ka logic
+  Future<List<FileModel>> _fetchFiles(int projectId, int folderId) async {
+    final String apiUrl =
+        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=$projectId';
+    final response = await http.get(Uri.parse(apiUrl));
+    if (response.statusCode == 200) {
+      final dynamic body = json.decode(response.body);
+      final List<dynamic> allFiles = body is String ? json.decode(body) : body;
+      final List<dynamic> filtered = allFiles
+          .where((file) => file['fid'] == folderId)
+          .toList();
+      return filtered.map((json) => FileModel.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load files');
+    }
+  }
+
+  // File download aur open karne ka logic
+  Future<void> _handleFileTap(int fileId, String fileName) async {
+    setState(() {
+      _isDownloading = true;
+      _downloadingFileName = fileName;
+    });
+    try {
+      final url = Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId',
+      );
+      final response = await http.get(url);
+      if (response.statusCode != 200)
+        throw Exception('Download failed with status: ${response.statusCode}');
+
+      final tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(response.bodyBytes, flush: true);
+
+      if (!mounted) return;
+      _openFile(filePath, fileName, fileId);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error handling file: $e')));
+    } finally {
+      if (mounted)
+        setState(() {
+          _isDownloading = false;
+          _downloadingFileName = '';
+        });
+    }
+  }
+
+  void _openFile(String filePath, String fileName, int fileId) {
+    final extension = fileName.split('.').last.toLowerCase();
+    const officeExtensions = ['doc', 'docx', 'pptx'];
+    const imageExtensions = ['png', 'jpg', 'jpeg'];
+
+    if (officeExtensions.contains(extension)) {
+      final fileUrl =
+          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
+      final viewerUrl =
+          'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
+        ),
+      );
+      return;
+    }
+
+    Widget? viewer;
+    if (extension == 'pdf')
+      viewer = PdfViewerScreen(filePath: filePath, fileName: fileName);
+    else if (extension == 'epub')
+      viewer = EpubViewerScreen(filePath: filePath, fileName: fileName);
+    else if (extension == 'txt')
+      viewer = TextViewerScreen(filePath: filePath, fileName: fileName);
+    else if (imageExtensions.contains(extension))
+      viewer = ImageViewerScreen(filePath: filePath, fileName: fileName);
+    else if (extension == 'xlsx')
+      viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName);
+
+    if (viewer != null) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => viewer!));
+    } else {
+      OpenFilex.open(filePath).then((result) {
+        if (result.type != ResultType.done && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open file: ${result.message}')),
+          );
+        }
+      });
+    }
+  }
+
+  // File type ke hisaab se custom image icon dene ka logic
+  Widget _getIconForFile(String filename) {
+    final extension = filename.split('.').last.toLowerCase();
+    String imagePath;
+    switch (extension) {
+      case 'pdf':
+        imagePath = 'assets/images/pdf.png';
+        break;
+      case 'txt':
+        imagePath = 'assets/images/txt.png';
+        break;
+      case 'doc':
+      case 'docx':
+        imagePath = 'assets/images/doc.png';
+        break;
+      case 'png':
+        imagePath = 'assets/images/png.png';
+        break;
+      case 'jpg':
+        imagePath = 'assets/images/jpg.png';
+        break;
+      case 'jpeg':
+        imagePath = 'assets/images/jpeg.png';
+        break;
+      case 'xlsx':
+        imagePath = 'assets/images/xls.png';
+        break;
+      case 'pptx':
+        imagePath = 'assets/images/ppt.png';
+        break;
+      case "epub":
+        imagePath = 'assets/images/epub.png';
+      default:
+        imagePath = 'assets/images/pages.png';
+    }
+    return Image.asset(
+      imagePath,
+      width: 24,
+      height: 24,
+      errorBuilder: (c, e, s) => Icon(
+        Icons.insert_drive_file,
+        size: 24,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final Color primaryColor = Theme.of(context).colorScheme.primary;
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.project.title),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.project.title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      appBar: AppBar(title: Text(widget.projectTitle)),
+      body: Column(
+        children: [
+          // Upar ka DYNAMIC Hissa
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: _selectedFolder == null
+                  ? _buildProjectDetailsView()
+                  : _buildFileListView(),
             ),
-            const SizedBox(height: 8),
-            Html(data: widget.project.projectDesc),
-            const Divider(height: 32, thickness: 1),
-            FutureBuilder<List<Folder>>(
-              future: _foldersFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                      child: Text('No folders found in this project.'));
-                } else {
-                  final folders = snapshot.data!;
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 1,
-                    ),
-                    itemCount: folders.length,
-                    itemBuilder: (context, index) {
-                      final folder = folders[index];
-                      return InkWell(
-                        onTap: () {
-                          // File list screen par navigate karne ka logic
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => FileListScreen(
-                                projectId: widget.project.projectId,
-                                folderId: folder.id,
-                                folderName: folder.name,
+          ),
+
+          // Neeche ka STATIC Hissa
+          _buildFolderGridView(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProjectDetailsView() {
+    return FutureBuilder<Project>(
+      key: const ValueKey('projectDetails'),
+      future: _projectDetailsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text("Error: ${snapshot.error}"));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: Text("No project details found."));
+        }
+        final project = snapshot.data!;
+        return Align(
+          alignment: Alignment.topLeft,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  project.title,
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Html(data: project.projectDesc),
+                const Divider(height: 32, thickness: 1),
+                // const Text(
+                //   'Coordinator Details',
+                //   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                // ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(project.coordinatorName,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      "${project.coordinatorPosition}\n${project.coordinatorOrganization}"),
+                  // trailing: Icon(Icons.person,
+                  //     color: Theme.of(context).colorScheme.primary),
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Naya file list UI
+  Widget _buildFileListView() {
+    return Column(
+      key: ValueKey(_selectedFolder!.id),
+      children: [
+        // Folder ka header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+          child: Row(
+            children: [
+              Icon(Icons.folder_open, color: Colors.grey[700], size: 40),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  _selectedFolder!.name,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  setState(() {
+                    _selectedFolder = null;
+                    _filesFuture = null;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        // Files ke table ka header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          color: Colors.grey[200],
+          child: Row(
+            children: [
+              const SizedBox(width: 40), // Icon ke liye space
+              const Expanded(
+                flex: 5,
+                child: Text(
+                  'Name',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Size',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Date',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Files ki scrollable list
+        Expanded(
+          child: FutureBuilder<List<FileModel>>(
+            future: _filesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              } else if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(
+                  child: Text('No files found in this folder.'),
+                );
+              } else {
+                final files = snapshot.data!;
+                return ListView.separated(
+                  itemCount: files.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final file = files[index];
+                    final isCurrentlyDownloading =
+                        _isDownloading && _downloadingFileName == file.name;
+                    return InkWell(
+                      onTap: isCurrentlyDownloading
+                          ? null
+                          : () => _handleFileTap(file.id, file.name),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        child: Row(
+                          children: [
+                            _getIconForFile(file.name),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 5,
+                              child: Text(
+                                file.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          );
-                        },
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.folder_open_outlined,
-                                color: primaryColor, size: 50),
-                            const SizedBox(height: 8),
-                            Text(
-                              folder.name,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w500),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                file.size,
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                file.dateModified,
+                                textAlign: TextAlign.right,
+                              ),
                             ),
                           ],
                         ),
-                      );
-                    },
-                  );
-                }
-              },
-            ),
-          ],
+                      ),
+                    );
+                  },
+                );
+              }
+            },
+          ),
         ),
+      ],
+    );
+  }
+
+  // Folders ka grid dikhane wala widget
+  Widget _buildFolderGridView() {
+    return Container(
+      height: 400, // Grid ki height ko fix kiya hai
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey[300]!)),
+      ),
+      child: FutureBuilder<List<Folder>>(
+        future: _foldersFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No folders found.'));
+          } else {
+            final folders = snapshot.data!;
+            return GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 1,
+              ),
+              itemCount: folders.length,
+              itemBuilder: (context, index) {
+                final folder = folders[index];
+                return InkWell(
+                  onTap: () {
+                    setState(() {
+                      _selectedFolder = folder;
+                      _filesFuture = _fetchFiles(widget.projectId, folder.id);
+                    });
+                  },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_open_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 50,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        folder.name,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          }
+        },
       ),
     );
   }
 }
-

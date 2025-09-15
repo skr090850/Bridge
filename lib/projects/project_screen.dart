@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'project_model.dart';
-import 'project_detail_screen.dart'; // This screen will show folders for a project
+import 'model/project_model.dart';
+import 'project_detail_screen.dart';
 
 class ProjectScreen extends StatefulWidget {
   const ProjectScreen({super.key});
@@ -15,13 +15,34 @@ class _ProjectScreenState extends State<ProjectScreen> {
   late Future<List<Project>> _projectsFuture;
 
   @override
-  void initState() {
-    super.initState();
-    _projectsFuture = _fetchProjects(1000); 
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final arguments =
+        ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+
+    if (arguments != null &&
+        arguments.containsKey('userId') &&
+        arguments.containsKey('userRole')) {
+      final int userId = arguments['userId'];
+      final String userRole = arguments['userRole'];
+      _projectsFuture = _fetchProjects(userId, userRole);
+    } else {
+      // Fallback for testing, agar arguments na milein
+      _projectsFuture = _fetchProjects(1000, 'sysadmin');
+    }
   }
 
-  Future<List<Project>> _fetchProjects(int userId) async {
-    const String apiUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Template/myprocjectuser';
+  Future<List<Project>> _fetchProjects(int userId, String userRole) async {
+    String apiUrl;
+    
+    // User role ke hisaab se API URL chuna gaya hai
+    if (userRole.toLowerCase() == 'sysadmin') {
+      apiUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
+    } else {
+      apiUrl =
+          'http://183.82.115.221/Bridge/BridgeApi/api/Template/myprocjectuser';
+    }
+
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -31,14 +52,25 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        if (responseData is Map<String, dynamic> && responseData.containsKey('projects')) {
+        
+        // Dono APIs ke response format ko handle karne ka logic
+        if (responseData is Map<String, dynamic> &&
+            responseData.containsKey('projects')) {
           final List<dynamic> projectsJson = responseData['projects'];
           return projectsJson.map((json) => Project.fromJson(json)).toList();
-        } else {
-           throw Exception('Unexpected JSON format from projects API');
+        } else if (responseData is List) {
+          return responseData.map((json) => Project.fromJson(json)).toList();
+        } 
+        else if (responseData is String) {
+          final List<dynamic> projectsJson = json.decode(responseData);
+          return projectsJson.map((json) => Project.fromJson(json)).toList();
+        }
+        else {
+          throw Exception('Unexpected JSON format from API');
         }
       } else {
-        throw Exception('Failed to load projects. Status code: ${response.statusCode}');
+        throw Exception(
+            'Failed to load projects. Status code: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('An error occurred while fetching projects: $e');
@@ -56,19 +88,20 @@ class _ProjectScreenState extends State<ProjectScreen> {
       ),
       body: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            width: double.infinity,
-            color: primaryColor,
-            child: const Text(
-              'PROJECTNAME',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ),
+          // Container(
+          //   padding:
+          //       const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          //   width: double.infinity,
+          //   color: primaryColor,
+          //   child: const Text(
+          //     'PROJECTNAME',
+          //     style: TextStyle(
+          //       color: Colors.white,
+          //       fontWeight: FontWeight.bold,
+          //       fontSize: 16,
+          //     ),
+          //   ),
+          // ),
           Expanded(
             child: FutureBuilder<List<Project>>(
               future: _projectsFuture,
@@ -93,22 +126,24 @@ class _ProjectScreenState extends State<ProjectScreen> {
                               color: primaryColor,
                               size: 32,
                             ),
-                            title: Text(project.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text(project.coordinator),
+                            title: Text(project.title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
+                            subtitle: Text(project.coordinatorName),
                             onTap: () {
-                              // Navigation ko theek kiya gaya hai
-                              // Ab poora project object detail screen par bheja ja raha hai
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => ProjectDetailScreen(
-                                    project: project,
+                                    projectId: project.projectId,
+                                    projectTitle: project.title,
                                   ),
                                 ),
                               );
                             },
                           ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
+                          const Divider(
+                              height: 1, indent: 16, endIndent: 16),
                         ],
                       );
                     },

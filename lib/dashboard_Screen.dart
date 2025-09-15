@@ -68,16 +68,19 @@ class DashboardScreen extends StatelessWidget {
                     context,
                     imagePath: 'assets/images/alert.jpg',
                     label: 'ALERTS',
+                    onTap: () => Navigator.pushNamed(context, '/alerts'),
                   ),
                   _buildDashboardItem(
                     context,
                     imagePath: 'assets/images/high_risk.jpg',
-                    label: 'HI-RISK',
+                    label: 'HELP DESK',
+                    onTap: () => Navigator.pushNamed(context, '/helpdesk'),
                   ),
                   _buildDashboardItem(
                     context,
                     imagePath: 'assets/images/status.jpg',
                     label: 'STATUS',
+                    onTap: () => Navigator.pushNamed(context, '/status'),
                   ),
                   _buildDashboardItem(
                     context,

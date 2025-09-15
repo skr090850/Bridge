@@ -5,13 +5,13 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 
-import 'file_model.dart';
-import 'pdf_viewer_screen.dart';
-import 'epub_viewer_screen.dart';
-import 'doc_viewer_screen.dart';
-import 'text_viewer_screen.dart';
-import 'image_viewer_screen.dart';
-import 'xlsx_viewer_screen.dart';
+import 'model/file_model.dart';
+import 'viewers/pdf_viewer_screen.dart';
+import 'viewers/epub_viewer_screen.dart';
+import 'viewers/doc_viewer_screen.dart';
+import 'viewers/text_viewer_screen.dart';
+import 'viewers/image_viewer_screen.dart';
+import 'viewers/xlsx_viewer_screen.dart';
 
 class FileListScreen extends StatefulWidget {
   final int projectId;
