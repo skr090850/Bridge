@@ -148,8 +148,10 @@ class _MembersScreenState extends State<MembersScreen> {
                         ),
                         trailing: Text(
                           member.projectsCount.toString(),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
+                          // style: const TextStyle(
+                          //     fontWeight: FontWeight.bold, fontSize: 16),
+                          style: textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold),
                         ),
                       );
                     },

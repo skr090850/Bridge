@@ -67,6 +67,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
     const String photoBaseUrl =
         'http://183.82.115.221/Bridge/BridgeApi/img/users/';
     final Color primaryColor = Theme.of(context).colorScheme.primary;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -103,7 +104,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           const Spacer(flex: 1),
                           Expanded(
@@ -132,18 +133,22 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                           Expanded(
                             flex: 1,
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              // mainAxisAlignment: MainAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   member.projects.length.toString(),
-                                  style: TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.bold,
-                                    color: primaryColor,
-                                  ),
+                                  style: textTheme.headlineMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: primaryColor),
+                                  // style: TextStyle(
+                                  //   fontSize: 36,
+                                  //   fontWeight: FontWeight.bold,
+                                  //   color: primaryColor,
+                                  // ),
                                 ),
-                                const Text('PROJECTS',
-                                    style: TextStyle(fontSize: 12)),
+                                Text('PROJECTS',
+                                    style: textTheme.bodySmall),
                               ],
                             ),
                           ),
@@ -152,26 +157,20 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                       const SizedBox(height: 24),
                       Text(
                         member.displayname.toUpperCase(),
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: primaryColor),
+                        style: textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold, letterSpacing: 1.2,color: primaryColor),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${member.organization}, ${member.position}',
-                        style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic),
+                        style: textTheme.bodyMedium?.copyWith(color: Colors.grey[600],fontStyle: FontStyle.italic),
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
                           Text(
                             member.email,
-                            style: const TextStyle(
-                                fontSize: 14, color: Colors.black),
+                            style: textTheme.bodyMedium?.copyWith(color: Colors.black),
                           ),
                           const Padding(
                             padding:
@@ -180,16 +179,14 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                           ),
                           Text(
                             member.workPhone,
-                            style: const TextStyle(
-                                fontSize: 14, color: Colors.black),
+                            style: textTheme.bodyMedium?.copyWith(color: Colors.black),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
                         member.address,
-                        style: const TextStyle(
-                            fontSize: 14, color: Colors.black),
+                        style: textTheme.bodyMedium?.copyWith(color: Colors.black),
                       ),
                     ],
                   ),
@@ -213,25 +210,26 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   }
 
   Widget _buildProjectTableHeader(Color headerColor) {
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       decoration: BoxDecoration(
         color: headerColor.withOpacity(0.1),
       ),
-      child: const Row(
+      child: Row(
         children: [
           Expanded(
               flex: 2,
               child:
-                  Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
+                  Text('Date', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold ))),
           Expanded(
               flex: 4,
               child: Text('Project Name',
-                  style: TextStyle(fontWeight: FontWeight.bold))),
+                  style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold ))),
           Expanded(
               flex: 3,
               child: Text('Role',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold ),
                   textAlign: TextAlign.right)),
         ],
       ),
@@ -240,6 +238,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
   Widget _buildProjectTableBody(
       List<UserProject> projects, Color primaryColor) {
+    final textTheme = Theme.of(context).textTheme;
     if (projects.isEmpty) {
       return const Center(
         child: Padding(
@@ -275,18 +274,19 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             child: Row(
               children: [
                 Expanded(
-                    flex: 2, child: Text(_formatDate(project.createdDate))),
+                    flex: 2, child: Text(_formatDate(project.createdDate),style: textTheme.bodySmall?.copyWith(color: Colors.black),)),
                 Expanded(
                     flex: 4,
                     child: Text(
                       project.projectName,
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                      style: textTheme.bodySmall?.copyWith(color: Colors.black,fontWeight: FontWeight.w500),
                     )),
                 Expanded(
                     flex: 3,
                     child: Text(
                       project.role,
                       textAlign: TextAlign.right,
+                      style: textTheme.bodySmall?.copyWith(color: Colors.black),
                     )),
               ],
             ),
