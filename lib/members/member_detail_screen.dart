@@ -93,86 +93,103 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // User Info Card
                 Container(
                   width: double.infinity,
                   color: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundColor: Colors.grey[200],
-                            child: member.photo1.isEmpty
-                                ? const Icon(Icons.person,
-                                    size: 50, color: Colors.grey)
-                                : ClipOval(
-                                    child: Image.network(
-                                      photoUrl,
-                                      fit: BoxFit.cover,
-                                      width: 100,
-                                      height: 100,
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
-                                        return const Icon(Icons.person,
-                                            size: 50, color: Colors.grey);
-                                      },
+                          const Spacer(flex: 1),
+                          Expanded(
+                            flex: 2,
+                            child: CircleAvatar(
+                              radius: 75,
+                              backgroundColor: Colors.grey[200],
+                              child: member.photo1.isEmpty
+                                  ? const Icon(Icons.person,
+                                      size: 75, color: Colors.grey)
+                                  : ClipOval(
+                                      child: Image.network(
+                                        photoUrl,
+                                        fit: BoxFit.cover,
+                                        width: 150,
+                                        height: 150,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          return const Icon(Icons.person,
+                                              size: 75, color: Colors.grey);
+                                        },
+                                      ),
                                     ),
-                                  ),
+                            ),
                           ),
-                          Column(
-                            children: [
-                              Text(
-                                member.projects.length.toString(),
-                                style: TextStyle(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryColor,
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  member.projects.length.toString(),
+                                  style: TextStyle(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryColor,
+                                  ),
                                 ),
-                              ),
-                              const Text('PROJECTS'),
-                            ],
+                                const Text('PROJECTS',
+                                    style: TextStyle(fontSize: 12)),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Text(
                         member.displayname.toUpperCase(),
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: primaryColor),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         '${member.organization}, ${member.position}',
-                        textAlign: TextAlign.center,
-                        style:
-                            TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic),
                       ),
                       const SizedBox(height: 8),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             member.email,
-                            style: const TextStyle(fontSize: 14, color: Colors.black),
+                            style: const TextStyle(
+                                fontSize: 14, color: Colors.black),
                           ),
                           const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8.0),
+                            padding:
+                                EdgeInsets.symmetric(horizontal: 8.0),
                             child: Text("|"),
                           ),
                           Text(
                             member.workPhone,
-                            style: const TextStyle(fontSize: 14, color: Colors.black),
+                            style: const TextStyle(
+                                fontSize: 14, color: Colors.black),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         member.address,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14, color: Colors.black),
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.black),
                       ),
                     ],
                   ),

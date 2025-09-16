@@ -223,6 +223,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       body: Column(
         children: [
           Expanded(
+            flex: 1,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               child: _selectedFolder == null
@@ -230,8 +231,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   : _buildFileListView(),
             ),
           ),
-
-          _buildFolderGridView(),
+          Expanded(
+            flex: 1,
+            child: _buildFolderGridView(),
+          ),
         ],
       ),
     );
@@ -436,7 +439,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Widget _buildFolderGridView() {
     return Container(
-      height: 400,
+      // height: 400,
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,
