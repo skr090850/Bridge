@@ -129,7 +129,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                 // style: const TextStyle(
                                 //     fontWeight: FontWeight.bold)
                                 ),
-                            subtitle: Text(project.coordinatorName,style: TextTheme.bodySmall,),
+                            subtitle: Text(project.coordinatorName,style: TextTheme.bodySmall?.copyWith(color: Colors.grey[600]),),
                             onTap: () {
                               Navigator.push(
                                 context,

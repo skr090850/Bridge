@@ -47,28 +47,29 @@ class _MembersScreenState extends State<MembersScreen> {
   @override
   Widget build(BuildContext context) {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
-
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Members'),
       ),
       body: Column(
         children: [
-          // Header Row jaisa design mein hai
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             color: primaryColor.withOpacity(0.1),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   'Member',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  // style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style:textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  'Projects', // "SMS" ko "Projects" se badla gaya hai
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  'Projects',
+                  // style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style:textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -131,17 +132,20 @@ class _MembersScreenState extends State<MembersScreen> {
                                 ),
                         ),
                         title: Text(member.displayname,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w500)),
+                            // style:
+                            //     const TextStyle(fontWeight: FontWeight.w500)
+                            style: textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w500)),
                         subtitle: Text(
-                          // Subtitle mein ab organization aur position dono hain
                           '${member.organization}, ${member.position}',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey[600]),
+                          // style: TextStyle(
+                          //     fontSize: 12, color: Colors.grey[600]),
+                          style: textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        // API se Projects count ka istemal kiya gaya hai
                         trailing: Text(
                           member.projectsCount.toString(),
                           style: const TextStyle(
