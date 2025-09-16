@@ -8,6 +8,7 @@ import 'projects/project_detail_screen.dart';
 import 'members/members_screen.dart';
 import 'members/member_detail_screen.dart';
 import 'help_desk/help_desk_screen.dart';
+// import 'home_screen.dart';
 
 
 void main() {
@@ -76,6 +77,7 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
+        // '/home': (context) => const HomeScreen(),
         '/dashboard': (context) => const DashboardScreen(),
         '/project': (context) => const ProjectScreen(),
         // '/projectDetail': (context) => ProjectDetailScreen(),
