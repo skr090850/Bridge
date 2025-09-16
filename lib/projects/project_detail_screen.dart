@@ -255,6 +255,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           return const Center(child: Text("No project details found."));
         }
         final project = snapshot.data!;
+        final textTheme = Theme.of(context).textTheme;
         return Align(
           alignment: Alignment.topLeft,
           child: SingleChildScrollView(
@@ -264,9 +265,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               children: [
                 Text(
                   project.title,
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.bold),
+                  style:textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  // style: const TextStyle(
+                  //     fontSize: 24, fontWeight: FontWeight.bold),
+
                 ),
+                
                 const SizedBox(height: 8),
                 Html(data: project.projectDesc),
                 const Divider(height: 32, thickness: 1),
@@ -293,6 +299,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildFileListView() {
+    final textTheme = Theme.of(context).textTheme;
     return Column(
       key: ValueKey(_selectedFolder!.id),
       children: [
@@ -305,10 +312,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               Expanded(
                 child: Text(
                   _selectedFolder!.name,
-                  style: const TextStyle(
-                    fontSize: 20,
+                  style: textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
+                  // style: const TextStyle(
+                  //   fontSize: 20,
+                  //   fontWeight: FontWeight.bold,
+                  // ),
                 ),
               ),
               IconButton(
@@ -394,6 +404,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               flex: 5,
                               child: Text(
                                 file.name,
+                                style: textTheme.bodySmall,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -402,6 +413,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               flex: 2,
                               child: Text(
                                 file.size,
+                                style: textTheme.bodySmall,
                                 textAlign: TextAlign.right,
                               ),
                             ),
@@ -420,6 +432,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                   )
                                 : Text(
                                     file.dateModified,
+                                    style: textTheme.bodySmall,
                                     textAlign: TextAlign.right,
                                   ),
                           ),
@@ -479,11 +492,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       Icon(
                         Icons.folder_open_outlined,
                         color: Theme.of(context).colorScheme.primary,
-                        size: 50,
+                        size: 35,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         folder.name,
+                        style: Theme.of(context).textTheme.labelMedium,
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

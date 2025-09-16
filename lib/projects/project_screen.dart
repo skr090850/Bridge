@@ -78,6 +78,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
   @override
   Widget build(BuildContext context) {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
+    final TextTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -121,12 +122,14 @@ class _ProjectScreenState extends State<ProjectScreen> {
                             leading: Icon(
                               Icons.settings_input_component_outlined,
                               color: primaryColor,
-                              size: 32,
+                              size: 30,
                             ),
                             title: Text(project.title,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold)),
-                            subtitle: Text(project.coordinatorName),
+                            style: TextTheme.labelLarge,
+                                // style: const TextStyle(
+                                //     fontWeight: FontWeight.bold)
+                                ),
+                            subtitle: Text(project.coordinatorName,style: TextTheme.bodySmall,),
                             onTap: () {
                               Navigator.push(
                                 context,
