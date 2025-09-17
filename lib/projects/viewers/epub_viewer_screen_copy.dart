@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:epubx/epubx.dart' hide Image;
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:path/path.dart' as p;
+import 'package:csslib/parser.dart' as cssparser;
+import 'package:csslib/visitor.dart';
 
 class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
@@ -17,18 +19,50 @@ class EpubViewerScreenCopy extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<EpubViewerScreenCopy> createState() => _EpubViewerScreenState();
+  State<EpubViewerScreenCopy> createState() => _EpubViewerScreenCopyState();
 }
 
-class _EpubViewerScreenState extends State<EpubViewerScreenCopy> {
+class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   bool _loading = true;
   EpubBook? _book;
   Map<String, Uint8List> _images = {};
+  final Map<String, Map<String, String>> _cssRules = {};
 
   @override
   void initState() {
     super.initState();
     _loadBook();
+  }
+
+  void _parseCssFromBook() {
+    if (_book?.Content?.Css == null || _book!.Content!.Css!.isEmpty) {
+      return;
+    }
+
+    final allCssContent = _book!.Content!.Css!.values
+        .map((cssFile) => cssFile.Content)
+        .join('\n');
+
+    if (allCssContent.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      final styleSheet = cssparser.parse(allCssContent, errors: []);
+      final visitor = _CssVisitor(
+        onRule: (selector, declarations) {
+          final cleanSelector = selector.split('{').first.trim();
+          if (_cssRules.containsKey(cleanSelector)) {
+            _cssRules[cleanSelector]!.addAll(declarations);
+          } else {
+            _cssRules[cleanSelector] = declarations;
+          }
+        },
+      );
+      styleSheet.visit(visitor);
+    } catch (e) {
+      // CSS parse error
+    }
   }
 
   Future<void> _loadBook() async {
@@ -38,98 +72,128 @@ class _EpubViewerScreenState extends State<EpubViewerScreenCopy> {
       final book = await EpubReader.readBook(bytes);
 
       final images = <String, Uint8List>{};
-      if (book.Content?.Images != null) {
-        book.Content!.Images!.forEach((key, value) {
-          if (value.Content != null) {
-            images[key] = Uint8List.fromList(value.Content!);
-          }
-        });
-      }
-
-      debugPrint('--- EPUB Loading Report ---');
-      debugPrint('Total images loaded from EPUB: ${images.length}');
-      if (images.isNotEmpty) {
-        debugPrint('Available image keys (paths): ${images.keys.toList()}');
-      }
-      debugPrint('--- End of Report ---\n');
+      book.Content?.Images?.forEach((key, value) {
+        if (value.Content != null) {
+          images[key] = Uint8List.fromList(value.Content!);
+        }
+      });
 
       if (!mounted) return;
 
       setState(() {
         _book = book;
         _images = images;
+        _parseCssFromBook();
         _loading = false;
       });
     } catch (e) {
-      debugPrint("Failed to load EPUB: $e");
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed in open EPUB: $e")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Failed to open EPUB: $e")));
       }
     }
   }
+
   Uint8List? _findImageData(String imagePath, String? chapterPath) {
     final decodedPath = Uri.decodeComponent(imagePath);
-
-    if (_images.containsKey(decodedPath)) {
-      return _images[decodedPath];
-    }
+    if (_images.containsKey(decodedPath)) return _images[decodedPath];
 
     if (chapterPath != null) {
-      try {
-        final resolvedPath = p.url.normalize(
-          p.url.join(p.url.dirname(chapterPath), decodedPath),
-        );
-        if (_images.containsKey(resolvedPath)) {
-          return _images[resolvedPath];
-        }
-      } catch (_) {}
+      final resolvedPath = p.url.normalize(
+        p.url.join(p.url.dirname(chapterPath), decodedPath),
+      );
+      if (_images.containsKey(resolvedPath)) return _images[resolvedPath];
     }
 
     final imageName = p.basename(decodedPath);
     for (final key in _images.keys) {
-      if (p.basename(key) == imageName) {
-        return _images[key];
-      }
+      if (p.basename(key) == imageName) return _images[key];
     }
-    
     return null;
   }
 
   String _embedImagesInHtml(String htmlContent, String? chapterPath) {
-    final regex = RegExp(r'''(<img[^>]*src\s*=\s*|<image[^>]*xlink:href\s*=\s*)"([^"]+)"''', caseSensitive: false);
-    
+    final regex = RegExp(
+      r'''(<img[^>]*src\s*=\s*|<image[^>]*xlink:href\s*=\s*)"([^"]+)"''',
+      caseSensitive: false,
+    );
     return htmlContent.replaceAllMapped(regex, (match) {
       final tagPart = match.group(1)!;
       final imagePath = match.group(2)!;
-      
       final imageData = _findImageData(imagePath, chapterPath);
-      
       if (imageData != null) {
         final base64String = base64Encode(imageData);
         final mimeType = _getMimeType(imagePath);
         return '$tagPart"data:$mimeType;base64,$base64String"';
-      } else {
-        return match.input.substring(match.start, match.end);
       }
+      return match.input.substring(match.start, match.end);
     });
   }
 
   String _getMimeType(String filename) {
-    if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {
-      return 'image/jpeg';
-    } else if (filename.endsWith('.png')) {
-      return 'image/png';
-    } else if (filename.endsWith('.gif')) {
-      return 'image/gif';
-    } else if (filename.endsWith('.svg')) {
-      return 'image/svg+xml';
+    final extension = p.extension(filename).toLowerCase();
+    switch (extension) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.svg':
+        return 'image/svg+xml';
+      default:
+        return 'image/jpeg';
     }
-    return 'image/jpeg';
   }
-  
+
+  String _formatColorValue(String cssColor) {
+    final lowerCssColor = cssColor.toLowerCase().trim();
+    const colorMap = {
+      'black': '#000000',
+      'silver': '#C0C0C0',
+      'gray': '#808080',
+      'white': '#FFFFFF',
+      'maroon': '#800000',
+      'red': '#FF0000',
+      'purple': '#800080',
+      'fuchsia': '#FF00FF',
+      'green': '#008000',
+      'lime': '#00FF00',
+      'olive': '#808000',
+      'yellow': '#FFFF00',
+      'navy': '#000080',
+      'blue': '#0000FF',
+      'teal': '#008080',
+      'aqua': '#00FFFF',
+      'transparent': 'transparent',
+    };
+    if (RegExp(
+      r'^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$',
+    ).hasMatch(lowerCssColor)) {
+      return lowerCssColor;
+    }
+    if (lowerCssColor.startsWith('rgb')) {
+      final normalized = lowerCssColor
+          .replaceAll(RegExp(r'\s*,\s*'), ',')
+          .replaceAll(RegExp(r'\s+'), ' ');
+      return normalized;
+    }
+    if (lowerCssColor.startsWith('hsl')) {
+      final normalized = lowerCssColor
+          .replaceAll(RegExp(r'\s*,\s*'), ',')
+          .replaceAll(RegExp(r'\s+'), ' ');
+      return normalized;
+    }
+
+    if (colorMap.containsKey(lowerCssColor)) {
+      return colorMap[lowerCssColor]!;
+    }
+    return cssColor;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -138,61 +202,349 @@ class _EpubViewerScreenState extends State<EpubViewerScreenCopy> {
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-
     if (_book == null) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.fileName)),
-        body: const Center(child: Text("Book is not loaded")),
+        body: const Center(child: Text("Book could not be loaded.")),
       );
     }
 
+    const double baseFontSize = 16.0;
+    const double spacingMultiplier = 4.0;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_book?.Title ?? widget.fileName),
-      ),
+      appBar: AppBar(title: Text(_book?.Title ?? widget.fileName)),
       body: PageView.builder(
-        scrollDirection: Axis.horizontal,
         itemCount: _book?.Chapters?.length ?? 0,
         itemBuilder: (context, index) {
           final chapter = _book!.Chapters![index];
           final htmlContent = chapter.HtmlContent ?? "";
-          
-          final processedHtml = _embedImagesInHtml(htmlContent, chapter.ContentFileName);
+          final processedHtml = _embedImagesInHtml(
+            htmlContent,
+            chapter.ContentFileName,
+          );
 
-          return SafeArea(
-            child: Container(
-              color: const Color(0xFFFBF0D9),
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: HtmlWidget(
-                  processedHtml, 
-                  customStylesBuilder: (element) {
-                    if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
-                        .contains(element.localName)) {
-                      return {'text-align': 'center'};
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: HtmlWidget(
+              processedHtml,
+              customStylesBuilder: (element) {
+                final appliedStyles = <String, String>{};
+
+                // --- Logic from your second file to center images/headings ---
+                if ([
+                  'h1',
+                  'h2',
+                  'h3',
+                  'h4',
+                  'h5',
+                  'h6',
+                ].contains(element.localName)) {
+                  appliedStyles['text-align'] = 'center';
+                }
+                if (element.classes.any((c) => c.contains('center'))) {
+                  appliedStyles['text-align'] = 'center';
+                }
+                if (element.localName == 'div' &&
+                    element.children.length == 1 &&
+                    (element.children.first.localName == 'svg' ||
+                        element.children.first.localName == 'img')) {
+                  appliedStyles['text-align'] = 'center';
+                }
+
+                // --- CSS Specificity Logic from your first file ---
+                if (_cssRules.containsKey(element.localName)) {
+                  appliedStyles.addAll(_cssRules[element.localName]!);
+                }
+                for (final className in element.classes) {
+                  final classSelector = '.$className';
+                  if (_cssRules.containsKey(classSelector)) {
+                    appliedStyles.addAll(_cssRules[classSelector]!);
+                  }
+                  final tagAndClassSelector =
+                      '${element.localName}$classSelector';
+                  if (_cssRules.containsKey(tagAndClassSelector)) {
+                    appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
+                  }
+                }
+
+                if (appliedStyles.isEmpty) return null;
+
+                final finalStyles = <String, String>{};
+                final isImage = [
+                  'img',
+                  'svg',
+                  'image',
+                ].contains(element.localName);
+
+                appliedStyles.forEach((key, value) {
+                  final cleanValue = value.replaceAll('+', '').trim();
+                  if (cleanValue.isEmpty) return;
+
+                  // --- APPLY ONLY IMAGE-RELATED STYLES TO IMAGES ---
+                  if (isImage) {
+                    switch (key) {
+                      case 'width':
+                      case 'height':
+                      case 'max-width':
+                      case 'max-height':
+                      case 'min-width':
+                      case 'min-height':
+                      case 'margin':
+                      case 'padding':
+                      case 'border':
+                        finalStyles[key] = cleanValue;
+                        break;
                     }
-                    if (element.classes.any((c) => c.contains('center'))) {
-                      return {'text-align': 'center'};
-                    }
-                    if (element.localName == 'div' &&
-                        element.children.length == 1 &&
-                        (element.children.first.localName == 'svg' ||
-                            element.children.first.localName == 'img')) {
-                      return {'text-align': 'center'};
-                    }
-                    return null;
-                  },
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    height: 1.6,
-                    color: Color(0xFF5D4037),
-                  ),
-                ),
-              ),
+                    return;
+                  }
+
+                  // --- ORIGINAL TEXT STYLING LOGIC ---
+                  switch (key) {
+                    case 'font-size':
+                      String finalSize;
+                      if (cleanValue.toLowerCase().endsWith('px') ||
+                          cleanValue.toLowerCase().endsWith('%')) {
+                        finalSize = cleanValue;
+                      } else {
+                        final numericValue = double.tryParse(
+                          cleanValue.replaceAll(
+                            RegExp(r'em', caseSensitive: false),
+                            '',
+                          ),
+                        );
+                        if (numericValue != null) {
+                          if (numericValue < 10) {
+                            finalSize = (numericValue * baseFontSize)
+                                .toString();
+                          } else {
+                            finalSize = ((numericValue / 100) * baseFontSize)
+                                .toString();
+                          }
+                        } else {
+                          finalSize = cleanValue;
+                        }
+                      }
+                      finalStyles[key] = finalSize;
+                      break;
+
+                    case 'line-height':
+                      String finalHeight;
+                      final numericValue = double.tryParse(cleanValue);
+                      if (numericValue != null) {
+                        if (numericValue > 10) {
+                          finalHeight = (numericValue / 100).toString();
+                        } else {
+                          finalHeight = numericValue.toString();
+                        }
+                      } else {
+                        finalHeight = cleanValue;
+                      }
+                      finalStyles[key] = finalHeight;
+                      break;
+
+                    case 'width':
+                    case 'height':
+                    case 'max-width':
+                    case 'max-height':
+                    case 'min-width':
+                    case 'min-height':
+                      String finalValue;
+                      final numericValue = double.tryParse(cleanValue);
+                      if (numericValue != null &&
+                          !cleanValue.contains(RegExp(r'[a-zA-Z%]'))) {
+                        if (numericValue == 100) {
+                          finalValue = '100%';
+                        } else {
+                          finalValue = '${cleanValue}px';
+                        }
+                      } else {
+                        finalValue = cleanValue;
+                      }
+                      finalStyles[key] = finalValue;
+                      break;
+
+                    case 'margin':
+                    case 'margin-top':
+                    case 'margin-bottom':
+                    case 'margin-left':
+                    case 'margin-right':
+                    case 'padding':
+                    case 'padding-top':
+                    case 'padding-bottom':
+                    case 'padding-left':
+                    case 'padding-right':
+                    case 'text-indent':
+                      String finalValue;
+                      if (cleanValue.toLowerCase().endsWith('px') ||
+                          cleanValue.toLowerCase().endsWith('%')) {
+                        finalValue = cleanValue;
+                      } else {
+                        final numericValue = double.tryParse(
+                          cleanValue.replaceAll(
+                            RegExp(r'em', caseSensitive: false),
+                            '',
+                          ),
+                        );
+                        if (numericValue != null) {
+                          final newSize = numericValue * spacingMultiplier;
+                          finalValue = '${newSize}px';
+                        } else {
+                          finalValue = cleanValue;
+                        }
+                      }
+                      finalStyles[key] = finalValue;
+                      break;
+
+                    case 'color':
+                    case 'background-color':
+                      finalStyles[key] = _formatColorValue(cleanValue);
+                      break;
+
+                    case 'font-weight':
+                    case 'font-style':
+                    case 'text-align':
+                    case 'text-decoration':
+                    case 'vertical-align':
+                    case 'list-style-type':
+                    case 'border':
+                    case 'border-top':
+                    case 'border-bottom':
+                    case 'border-left':
+                    case 'border-right':
+                    case 'border-style':
+                    case 'border-width':
+                    case 'border-color':
+                      finalStyles[key] = cleanValue;
+                      break;
+                  }
+                });
+
+                return finalStyles.isNotEmpty ? finalStyles : null;
+              },
             ),
           );
         },
       ),
     );
+  }
+}
+
+class _CssVisitor extends Visitor {
+  final Function(String selector, Map<String, String> declarations) onRule;
+  _CssVisitor({required this.onRule});
+
+  String _expressionToText(Expression expr) {
+    final printer = StringBuffer();
+    expr.visit(_CssPrinter(printer));
+    return printer.toString().trim();
+  }
+
+  @override
+  void visitRuleSet(RuleSet node) {
+    final selector =
+        node.selectorGroup?.selectors
+            .map((s) => s.span?.text ?? '')
+            .where((s) => s.isNotEmpty)
+            .join(', ') ??
+        '';
+
+    final declarations = <String, String>{};
+    for (var declaration in node.declarationGroup.declarations) {
+      if (declaration is Declaration) {
+        final property = declaration.property.toLowerCase();
+        // *** CORRECTED VALUE PARSING LOGIC ***
+        var value = '';
+        if (declaration.expression != null) {
+          value = _expressionToText(declaration.expression!);
+        }
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.substring(1, value.length - 1);
+        }
+        declarations[property] = value;
+      }
+    }
+
+    if (selector.isNotEmpty && declarations.isNotEmpty) {
+      final simpleSelectors = selector.split(',');
+      for (var simpleSelector in simpleSelectors) {
+        if (simpleSelector.trim().isNotEmpty) {
+          onRule(simpleSelector.trim(), declarations);
+        }
+      }
+    }
+  }
+}
+
+class _CssPrinter extends Visitor {
+  final StringBuffer buffer;
+  _CssPrinter(this.buffer);
+
+  @override
+  void visitHexColorTerm(HexColorTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitLiteralTerm(LiteralTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitNumberTerm(NumberTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitPercentageTerm(PercentageTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitLengthTerm(LengthTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitEmTerm(EmTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitExTerm(ExTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitAngleTerm(AngleTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitTimeTerm(TimeTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitFreqTerm(FreqTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitUriTerm(UriTerm node) {
+    buffer.write(node.text);
+  }
+
+  @override
+  void visitFunctionTerm(FunctionTerm node) {
+    buffer.write('${node.text}(');
+    for (int i = 0; i < node.params.length; i++) {
+      node.params[i].visit(this);
+      if (i < node.params.length - 1) {
+        buffer.write(','); // Always put comma between values
+      }
+    }
+    buffer.write(')');
   }
 }
