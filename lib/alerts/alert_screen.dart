@@ -45,7 +45,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   @override
   Widget build(BuildContext context) {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
-
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Alerts'),
@@ -56,15 +56,14 @@ class _AlertsScreenState extends State<AlertsScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             color: primaryColor.withOpacity(0.1),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Projects',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    style:textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
                 Text('SMS',
                     style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -95,13 +94,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
                         leading:
                             Icon(Icons.person_outline, color: Colors.grey[600]),
                         title: Text(alert.name,
-                            style: const TextStyle(fontWeight: FontWeight.w500)),
+                            style: textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w500)),
                         subtitle: Text(alert.designation,
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey[600])),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),),
                         trailing: Text(alert.smsCount.toString(),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16)),
+                            style: textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold)),
                         onTap: () {
                           Navigator.push(
                             context,
