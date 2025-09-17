@@ -6,21 +6,21 @@ import 'package:epubx/epubx.dart' hide Image;
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:path/path.dart' as p;
 
-class EpubViewerScreen extends StatefulWidget {
+class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
   final String fileName;
 
-  const EpubViewerScreen({
+  const EpubViewerScreenCopy({
     Key? key,
     required this.filePath,
     required this.fileName,
   }) : super(key: key);
 
   @override
-  State<EpubViewerScreen> createState() => _EpubViewerScreenState();
+  State<EpubViewerScreenCopy> createState() => _EpubViewerScreenState();
 }
 
-class _EpubViewerScreenState extends State<EpubViewerScreen> {
+class _EpubViewerScreenState extends State<EpubViewerScreenCopy> {
   bool _loading = true;
   EpubBook? _book;
   Map<String, Uint8List> _images = {};

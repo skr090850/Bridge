@@ -16,6 +16,7 @@ import 'viewers/epub_viewer_screen.dart';
 import 'viewers/text_viewer_screen.dart';
 import 'viewers/image_viewer_screen.dart';
 import 'viewers/xlsx_viewer_screen.dart';
+import 'viewers/epub_viewer_screen_copy.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -149,7 +150,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     if (extension == 'pdf')
       viewer = PdfViewerScreen(filePath: filePath, fileName: fileName);
     else if (extension == 'epub')
-      viewer = EpubViewerScreen(filePath: filePath, fileName: fileName);
+      // viewer = EpubViewerScreen(filePath: filePath, fileName: fileName);
+      viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName);
     else if (extension == 'txt')
       viewer = TextViewerScreen(filePath: filePath, fileName: fileName);
     else if (imageExtensions.contains(extension))
