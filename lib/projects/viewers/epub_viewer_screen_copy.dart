@@ -7,6 +7,7 @@ import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:path/path.dart' as p;
 import 'package:csslib/parser.dart' as cssparser;
 import 'package:csslib/visitor.dart';
+import 'package:html/dom.dart' as dom;
 
 class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
@@ -39,9 +40,8 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       return;
     }
 
-    final allCssContent = _book!.Content!.Css!.values
-        .map((cssFile) => cssFile.Content)
-        .join('\n');
+    final allCssContent =
+        _book!.Content!.Css!.values.map((cssFile) => cssFile.Content).join('\n');
 
     if (allCssContent.trim().isEmpty) {
       return;
@@ -61,7 +61,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       );
       styleSheet.visit(visitor);
     } catch (e) {
-      // CSS parse error
+      debugPrint("Failed to parse EPUB CSS: $e");
     }
   }
 
@@ -152,44 +152,23 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   String _formatColorValue(String cssColor) {
     final lowerCssColor = cssColor.toLowerCase().trim();
     const colorMap = {
-      'black': '#000000',
-      'silver': '#C0C0C0',
-      'gray': '#808080',
-      'white': '#FFFFFF',
-      'maroon': '#800000',
-      'red': '#FF0000',
-      'purple': '#800080',
-      'fuchsia': '#FF00FF',
-      'green': '#008000',
-      'lime': '#00FF00',
-      'olive': '#808000',
-      'yellow': '#FFFF00',
-      'navy': '#000080',
-      'blue': '#0000FF',
-      'teal': '#008080',
-      'aqua': '#00FFFF',
+      'black': '#000000', 'silver': '#C0C0C0', 'gray': '#808080', 'white': '#FFFFFF',
+      'maroon': '#800000', 'red': '#FF0000', 'purple': '#800080', 'fuchsia': '#FF00FF',
+      'green': '#008000', 'lime': '#00FF00', 'olive': '#808000', 'yellow': '#FFFF00',
+      'navy': '#000080', 'blue': '#0000FF', 'teal': '#008080', 'aqua': '#00FFFF',
       'transparent': 'transparent',
     };
-    if (RegExp(
-      r'^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$',
-    ).hasMatch(lowerCssColor)) {
+    if (RegExp(r'^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$').hasMatch(lowerCssColor)) {
       return lowerCssColor;
     }
-    if (lowerCssColor.startsWith('rgb')) {
-      final normalized = lowerCssColor
-          .replaceAll(RegExp(r'\s*,\s*'), ',')
-          .replaceAll(RegExp(r'\s+'), ' ');
-      return normalized;
+    if (lowerCssColor.startsWith('rgb') || lowerCssColor.startsWith('hsl')) {
+      return lowerCssColor.replaceAll(RegExp(r'\s*,\s*'), ',').replaceAll(RegExp(r'\s+'), ' ');
     }
-    if (lowerCssColor.startsWith('hsl')) {
-      final normalized = lowerCssColor
-          .replaceAll(RegExp(r'\s*,\s*'), ',')
-          .replaceAll(RegExp(r'\s+'), ' ');
-      return normalized;
-    }
-
     if (colorMap.containsKey(lowerCssColor)) {
       return colorMap[lowerCssColor]!;
+    }
+    if (RegExp(r'^([0-9a-f]{3}|[0-9a-f]{6})$').hasMatch(lowerCssColor)) {
+      return '#$lowerCssColor';
     }
     return cssColor;
   }
@@ -208,9 +187,8 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
         body: const Center(child: Text("Book could not be loaded.")),
       );
     }
-
-    const double baseFontSize = 16.0;
-    const double spacingMultiplier = 4.0;
+    
+    const double baseFontSize = 18.0;
 
     return Scaffold(
       appBar: AppBar(title: Text(_book?.Title ?? widget.fileName)),
@@ -224,204 +202,149 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
             chapter.ContentFileName,
           );
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: HtmlWidget(
-              processedHtml,
-              customStylesBuilder: (element) {
-                final appliedStyles = <String, String>{};
+          return InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 4.0,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: HtmlWidget(
+                processedHtml,
+                textStyle: const TextStyle(fontSize: baseFontSize),
+                customStylesBuilder: (element) {
+                  final appliedStyles = <String, String>{};
 
-                // --- Logic from your second file to center images/headings ---
-                if ([
-                  'h1',
-                  'h2',
-                  'h3',
-                  'h4',
-                  'h5',
-                  'h6',
-                ].contains(element.localName)) {
-                  appliedStyles['text-align'] = 'center';
-                }
-                if (element.classes.any((c) => c.contains('center'))) {
-                  appliedStyles['text-align'] = 'center';
-                }
-                if (element.localName == 'div' &&
-                    element.children.length == 1 &&
-                    (element.children.first.localName == 'svg' ||
-                        element.children.first.localName == 'img')) {
-                  appliedStyles['text-align'] = 'center';
-                }
-
-                // --- CSS Specificity Logic from your first file ---
-                if (_cssRules.containsKey(element.localName)) {
-                  appliedStyles.addAll(_cssRules[element.localName]!);
-                }
-                for (final className in element.classes) {
-                  final classSelector = '.$className';
-                  if (_cssRules.containsKey(classSelector)) {
-                    appliedStyles.addAll(_cssRules[classSelector]!);
+                  if (_cssRules.containsKey(element.localName)) {
+                    appliedStyles.addAll(_cssRules[element.localName]!);
                   }
-                  final tagAndClassSelector =
-                      '${element.localName}$classSelector';
-                  if (_cssRules.containsKey(tagAndClassSelector)) {
-                    appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
+                  for (final className in element.classes) {
+                    final classSelector = '.$className';
+                    if (_cssRules.containsKey(classSelector)) {
+                      appliedStyles.addAll(_cssRules[classSelector]!);
+                    }
+                    final tagAndClassSelector = '${element.localName}$classSelector';
+                    if (_cssRules.containsKey(tagAndClassSelector)) {
+                      appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
+                    }
                   }
-                }
 
-                if (appliedStyles.isEmpty) return null;
+                  if (element.attributes['align'] == 'center') {
+                    appliedStyles['text-align'] = 'center';
+                  }
 
-                final finalStyles = <String, String>{};
-                final isImage = [
-                  'img',
-                  'svg',
-                  'image',
-                ].contains(element.localName);
+                  if (element.localName == 'p') {
+                      final containsRealText = element.nodes.any((node) => node is dom.Text && node.text.trim().isNotEmpty);
+                      if (!containsRealText) {
+                          bool hasImage = false;
+                          void findImage(dom.Element el) {
+                              if (['img', 'svg', 'image'].contains(el.localName)) {
+                                  hasImage = true;
+                                  return;
+                              }
+                              for (final child in el.children) {
+                                  if (hasImage) break;
+                                  findImage(child);
+                              }
+                          }
+                          findImage(element);
+                          if (hasImage) {
+                              appliedStyles['text-align'] = 'center';
+                          }
+                      }
+                  }
 
-                appliedStyles.forEach((key, value) {
-                  final cleanValue = value.replaceAll('+', '').trim();
-                  if (cleanValue.isEmpty) return;
+                  if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].contains(element.localName)) {
+                    appliedStyles['text-align'] = 'center';
+                  }
+                  
+                  if (element.classes.any((c) => c.contains('center'))) {
+                    appliedStyles['text-align'] = 'center';
+                  }
+                  
+                  if (element.localName == 'div' &&
+                      element.children.length == 1 &&
+                      (element.children.first.localName == 'svg' ||
+                          element.children.first.localName == 'img')) {
+                    appliedStyles['text-align'] = 'center';
+                  }
 
-                  // --- APPLY ONLY IMAGE-RELATED STYLES TO IMAGES ---
-                  if (isImage) {
+                  if (appliedStyles.isEmpty) return null;
+                  
+                  final finalStyles = <String, String>{};
+                  final isImage = ['img', 'svg', 'image'].contains(element.localName);
+
+                  appliedStyles.forEach((key, value) {
+                    final cleanValue = value.replaceAll('+', '').trim();
+                    if (cleanValue.isEmpty) return;
+                    
+                    if (isImage) {
+                      const imageProps = ['width', 'height', 'max-width', 'max-height', 'min-width', 'min-height', 'margin', 'padding', 'border'];
+                      if (imageProps.contains(key)){
+                         finalStyles[key] = cleanValue;
+                      }
+                      return;
+                    }
+                    
                     switch (key) {
-                      case 'width':
-                      case 'height':
-                      case 'max-width':
-                      case 'max-height':
-                      case 'min-width':
-                      case 'min-height':
+                      case 'font-size':
+                        String finalSize;
+                        if (cleanValue.toLowerCase().endsWith('px') || cleanValue.toLowerCase().endsWith('%')) {
+                          finalSize = cleanValue;
+                        } else {
+                          final numericValue = double.tryParse(cleanValue.replaceAll(RegExp(r'[a-zA-Z]'),''));
+                          if (numericValue != null) {
+                             if (cleanValue.toLowerCase().contains('em')) {
+                               finalSize = '${numericValue * baseFontSize}';
+                             } else {
+                               finalSize = cleanValue;
+                             }
+                          } else {
+                            finalSize = cleanValue;
+                          }
+                        }
+                        finalStyles[key] = finalSize;
+                        break;
+
+                      case 'line-height':
+                        final numericValue = double.tryParse(cleanValue);
+                        if (numericValue != null) {
+                          finalStyles[key] = (numericValue > 10) ? (numericValue / 100).toString() : numericValue.toString();
+                        } else {
+                           finalStyles[key] = cleanValue;
+                        }
+                        break;
+
                       case 'margin':
                       case 'padding':
-                      case 'border':
+                      case 'text-indent':
+                        String finalValue;
+                        if (cleanValue.toLowerCase().endsWith('px') || cleanValue.toLowerCase().endsWith('%')) {
+                          finalValue = cleanValue;
+                        } else {
+                           final numericValue = double.tryParse(cleanValue.replaceAll(RegExp(r'[a-zA-Z]'),''));
+                           if(numericValue != null && cleanValue.toLowerCase().contains('em')){
+                             finalValue = '${numericValue * baseFontSize}px';
+                           } else {
+                             finalValue = cleanValue;
+                           }
+                        }
+                        finalStyles[key] = finalValue;
+                        break;
+
+                      case 'color':
+                      case 'background-color':
+                      case 'border-color':
+                      case 'text-decoration-color':
+                        finalStyles[key] = _formatColorValue(cleanValue);
+                        break;
+                      
+                      default:
                         finalStyles[key] = cleanValue;
                         break;
                     }
-                    return;
-                  }
-
-                  // --- ORIGINAL TEXT STYLING LOGIC ---
-                  switch (key) {
-                    case 'font-size':
-                      String finalSize;
-                      if (cleanValue.toLowerCase().endsWith('px') ||
-                          cleanValue.toLowerCase().endsWith('%')) {
-                        finalSize = cleanValue;
-                      } else {
-                        final numericValue = double.tryParse(
-                          cleanValue.replaceAll(
-                            RegExp(r'em', caseSensitive: false),
-                            '',
-                          ),
-                        );
-                        if (numericValue != null) {
-                          if (numericValue < 10) {
-                            finalSize = (numericValue * baseFontSize)
-                                .toString();
-                          } else {
-                            finalSize = ((numericValue / 100) * baseFontSize)
-                                .toString();
-                          }
-                        } else {
-                          finalSize = cleanValue;
-                        }
-                      }
-                      finalStyles[key] = finalSize;
-                      break;
-
-                    case 'line-height':
-                      String finalHeight;
-                      final numericValue = double.tryParse(cleanValue);
-                      if (numericValue != null) {
-                        if (numericValue > 10) {
-                          finalHeight = (numericValue / 100).toString();
-                        } else {
-                          finalHeight = numericValue.toString();
-                        }
-                      } else {
-                        finalHeight = cleanValue;
-                      }
-                      finalStyles[key] = finalHeight;
-                      break;
-
-                    case 'width':
-                    case 'height':
-                    case 'max-width':
-                    case 'max-height':
-                    case 'min-width':
-                    case 'min-height':
-                      String finalValue;
-                      final numericValue = double.tryParse(cleanValue);
-                      if (numericValue != null &&
-                          !cleanValue.contains(RegExp(r'[a-zA-Z%]'))) {
-                        if (numericValue == 100) {
-                          finalValue = '100%';
-                        } else {
-                          finalValue = '${cleanValue}px';
-                        }
-                      } else {
-                        finalValue = cleanValue;
-                      }
-                      finalStyles[key] = finalValue;
-                      break;
-
-                    case 'margin':
-                    case 'margin-top':
-                    case 'margin-bottom':
-                    case 'margin-left':
-                    case 'margin-right':
-                    case 'padding':
-                    case 'padding-top':
-                    case 'padding-bottom':
-                    case 'padding-left':
-                    case 'padding-right':
-                    case 'text-indent':
-                      String finalValue;
-                      if (cleanValue.toLowerCase().endsWith('px') ||
-                          cleanValue.toLowerCase().endsWith('%')) {
-                        finalValue = cleanValue;
-                      } else {
-                        final numericValue = double.tryParse(
-                          cleanValue.replaceAll(
-                            RegExp(r'em', caseSensitive: false),
-                            '',
-                          ),
-                        );
-                        if (numericValue != null) {
-                          final newSize = numericValue * spacingMultiplier;
-                          finalValue = '${newSize}px';
-                        } else {
-                          finalValue = cleanValue;
-                        }
-                      }
-                      finalStyles[key] = finalValue;
-                      break;
-
-                    case 'color':
-                    case 'background-color':
-                      finalStyles[key] = _formatColorValue(cleanValue);
-                      break;
-
-                    case 'font-weight':
-                    case 'font-style':
-                    case 'text-align':
-                    case 'text-decoration':
-                    case 'vertical-align':
-                    case 'list-style-type':
-                    case 'border':
-                    case 'border-top':
-                    case 'border-bottom':
-                    case 'border-left':
-                    case 'border-right':
-                    case 'border-style':
-                    case 'border-width':
-                    case 'border-color':
-                      finalStyles[key] = cleanValue;
-                      break;
-                  }
-                });
-
-                return finalStyles.isNotEmpty ? finalStyles : null;
-              },
+                  });
+                  return finalStyles.isNotEmpty ? finalStyles : null;
+                },
+              ),
             ),
           );
         },
@@ -429,6 +352,9 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
     );
   }
 }
+
+
+// --- HELPER CLASSES FOR CSS PARSING ---
 
 class _CssVisitor extends Visitor {
   final Function(String selector, Map<String, String> declarations) onRule;
@@ -443,23 +369,17 @@ class _CssVisitor extends Visitor {
   @override
   void visitRuleSet(RuleSet node) {
     final selector =
-        node.selectorGroup?.selectors
-            .map((s) => s.span?.text ?? '')
-            .where((s) => s.isNotEmpty)
-            .join(', ') ??
-        '';
+        node.selectorGroup?.selectors.map((s) => s.span?.text ?? '').where((s) => s.isNotEmpty).join(', ') ?? '';
 
     final declarations = <String, String>{};
     for (var declaration in node.declarationGroup.declarations) {
       if (declaration is Declaration) {
         final property = declaration.property.toLowerCase();
-        // *** CORRECTED VALUE PARSING LOGIC ***
         var value = '';
         if (declaration.expression != null) {
           value = _expressionToText(declaration.expression!);
         }
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
           value = value.substring(1, value.length - 1);
         }
         declarations[property] = value;
@@ -482,59 +402,27 @@ class _CssPrinter extends Visitor {
   _CssPrinter(this.buffer);
 
   @override
-  void visitHexColorTerm(HexColorTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitHexColorTerm(HexColorTerm node) => buffer.write(node.text);
   @override
-  void visitLiteralTerm(LiteralTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitLiteralTerm(LiteralTerm node) => buffer.write(node.text);
   @override
-  void visitNumberTerm(NumberTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitNumberTerm(NumberTerm node) => buffer.write(node.text);
   @override
-  void visitPercentageTerm(PercentageTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitPercentageTerm(PercentageTerm node) => buffer.write(node.text);
   @override
-  void visitLengthTerm(LengthTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitLengthTerm(LengthTerm node) => buffer.write(node.text);
   @override
-  void visitEmTerm(EmTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitEmTerm(EmTerm node) => buffer.write(node.text);
   @override
-  void visitExTerm(ExTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitExTerm(ExTerm node) => buffer.write(node.text);
   @override
-  void visitAngleTerm(AngleTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitAngleTerm(AngleTerm node) => buffer.write(node.text);
   @override
-  void visitTimeTerm(TimeTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitTimeTerm(TimeTerm node) => buffer.write(node.text);
   @override
-  void visitFreqTerm(FreqTerm node) {
-    buffer.write(node.text);
-  }
-
+  void visitFreqTerm(FreqTerm node) => buffer.write(node.text);
   @override
-  void visitUriTerm(UriTerm node) {
-    buffer.write(node.text);
-  }
+  void visitUriTerm(UriTerm node) => buffer.write(node.text);
 
   @override
   void visitFunctionTerm(FunctionTerm node) {
@@ -542,9 +430,10 @@ class _CssPrinter extends Visitor {
     for (int i = 0; i < node.params.length; i++) {
       node.params[i].visit(this);
       if (i < node.params.length - 1) {
-        buffer.write(','); // Always put comma between values
+        buffer.write(',');
       }
     }
     buffer.write(')');
   }
 }
+
