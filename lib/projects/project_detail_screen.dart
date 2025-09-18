@@ -16,8 +16,8 @@ import 'viewers/epub_viewer_screen.dart';
 import 'viewers/text_viewer_screen.dart';
 import 'viewers/image_viewer_screen.dart';
 import 'viewers/xlsx_viewer_screen.dart';
-import 'viewers/epub_viewer_screen_copy.dart';
-import 'viewers/epub_viewer.dart';
+import 'viewers/epub_viewer_screen_copy_withzoom.dart';
+import 'viewers/epub_viewer_withoutZoom.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;

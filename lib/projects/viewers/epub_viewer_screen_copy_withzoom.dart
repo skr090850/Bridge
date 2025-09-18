@@ -10,28 +10,31 @@ import 'package:csslib/visitor.dart' hide MediaQuery;
 import 'package:html/dom.dart' as dom;
 import 'package:flutter/foundation.dart';
 
-class EpubViewer extends StatefulWidget {
+class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
   final String fileName;
 
-  const EpubViewer({
+  const EpubViewerScreenCopy({
     Key? key,
     required this.filePath,
     required this.fileName,
   }) : super(key: key);
 
   @override
-  State<EpubViewer> createState() => _EpubViewerScreenCopyState();
+  State<EpubViewerScreenCopy> createState() => _EpubViewerScreenCopyState();
 }
 
-class _EpubViewerScreenCopyState extends State<EpubViewer> {
+class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   bool _loading = true;
   EpubBook? _book;
+  bool _isFixedLayout = false;
   Map<String, Uint8List> _images = {};
   final Map<String, Map<String, String>> _cssRules = {};
 
   int _currentChapter = 0;
   final PageController _pageController = PageController();
+  late TransformationController _transformationController;
+  bool _isZoomed = false;
 
   /// Cleans the HTML content by removing unwanted tags and whitespace.
   String _cleanHtml(String html) {
@@ -56,17 +59,34 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
   @override
   void initState() {
     super.initState();
+    _transformationController = TransformationController();
+    _transformationController.addListener(_onScaleChanged);
     _loadBook();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _transformationController.removeListener(_onScaleChanged);
+    _transformationController.dispose();
     super.dispose();
+  }
+
+  void _onScaleChanged() {
+    final isCurrentlyZoomed =
+        _transformationController.value.getMaxScaleOnAxis() > 1.0;
+    if (isCurrentlyZoomed != _isZoomed) {
+      setState(() {
+        _isZoomed = isCurrentlyZoomed;
+      });
+    }
   }
 
   /// Parses all CSS content from the EPUB book and stores the rules.
   void _parseCssFromBook() {
+    if (_isFixedLayout) {
+      return;
+    }
     if (_book?.Content?.Css == null || _book!.Content!.Css!.isEmpty) {
       return;
     }
@@ -143,14 +163,16 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
       final manifestItems = book.Schema?.Package?.Manifest?.Items;
       final htmlFiles = book.Content?.Html;
 
-      if (spineItems != null && (book.Chapters == null || book.Chapters!.length < spineItems.length)) {
-        
+      if (spineItems != null &&
+          (book.Chapters == null ||
+              book.Chapters!.length < spineItems.length)) {
         debugPrint(
-            "TOC is incomplete. Rebuilding chapters from spine. Spine items: ${spineItems.length}, Parsed chapters: ${book.Chapters?.length ?? 0}");
+          "TOC is incomplete. Rebuilding chapters from spine. Spine items: ${spineItems.length}, Parsed chapters: ${book.Chapters?.length ?? 0}",
+        );
 
         if (manifestItems != null && htmlFiles != null) {
           final newChapters = <EpubChapter>[];
-          
+
           for (final spineItem in spineItems) {
             final manifestItem = manifestItems.firstWhere(
               (item) => item.Id == spineItem.IdRef,
@@ -165,7 +187,10 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
                   ..Title = manifestItem.Href!
                       .split('/')
                       .last
-                      .replaceAll(RegExp(r'\.x?html$', caseSensitive: false), '')
+                      .replaceAll(
+                        RegExp(r'\.x?html$', caseSensitive: false),
+                        '',
+                      )
                   ..ContentFileName = manifestItem.Href
                   ..HtmlContent = htmlFile?.Content,
               );
@@ -177,6 +202,19 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
           }
         }
       }
+      // --- START: DETECT FIXED-LAYOUT EPUB ---
+      bool isFixedLayout = false;
+      if (book.Content?.Html != null) {
+        for (final htmlFile in book.Content!.Html!.values) {
+          if (htmlFile.Content != null &&
+              htmlFile.Content!.contains('<meta name="viewport"')) {
+            isFixedLayout = true;
+            debugPrint("Fixed-layout EPUB detected.");
+            break; // Found it, no need to check other files.
+          }
+        }
+      }
+      // --- END: DETECT FIXED-LAYOUT EPUB ---
 
       final images = <String, Uint8List>{};
       book.Content?.Images?.forEach((key, value) {
@@ -190,6 +228,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
       setState(() {
         _book = book;
         _images = images;
+        _isFixedLayout = isFixedLayout;
         _parseCssFromBook();
       });
     } catch (e) {
@@ -354,9 +393,13 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
         children: [
           PageView.builder(
             controller: _pageController,
+            // physics: _isZoomed
+            //     ? const NeverScrollableScrollPhysics()
+            //     : const PageScrollPhysics(),
             itemCount: _book!.Chapters!.length,
             onPageChanged: (index) {
               setState(() => _currentChapter = index);
+              _transformationController.value = Matrix4.identity();
             },
             itemBuilder: (context, index) {
               final chapter = _book!.Chapters![index];
@@ -383,185 +426,194 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
               final cleanedHtml = _cleanHtml(htmlContent);
 
               final processedHtml = _embedImagesInHtml(
-                htmlContent,
+                // htmlContent,
+                cleanedHtml,
                 chapter.ContentFileName,
               );
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 60.0),
-                child: HtmlWidget(
-                  processedHtml,
-                  textStyle: const TextStyle(
-                    fontSize: baseFontSize,
-                    height: 1.5,
-                    color: Color(0xFF5D4037),
-                  ),
-                  customStylesBuilder: (element) {
-                    if (element.localName == 'p' &&
-                        element.text.trim().isEmpty &&
-                        !element.innerHtml.contains('<img')) {
-                      return {'height': '0', 'margin': '0', 'padding': '0'};
-                    }
-                    final appliedStyles = <String, String>{};
+              // return SingleChildScrollView(
+              return InteractiveViewer(
+                transformationController: _transformationController,
+                minScale: 1.0,
+                maxScale: 4.0,
+                child: SingleChildScrollView(
+                  // physics: _isZoomed
+                  //     ? const NeverScrollableScrollPhysics()
+                  //     : const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 60.0),
+                  child: HtmlWidget(
+                    processedHtml,
+                    textStyle: const TextStyle(
+                      fontSize: baseFontSize,
+                      height: 1.5,
+                      color: Color(0xFF5D4037),
+                    ),
+                    customStylesBuilder: (element) {
+                      if (element.localName == 'p' &&
+                          element.text.trim().isEmpty &&
+                          !element.innerHtml.contains('<img')) {
+                        return {'height': '0', 'margin': '0', 'padding': '0'};
+                      }
+                      final appliedStyles = <String, String>{};
 
-                    // Apply styles based on specificity
-                    if (_cssRules.containsKey('*'))
-                      appliedStyles.addAll(_cssRules['*']!);
-                    if (_cssRules.containsKey(element.localName))
-                      appliedStyles.addAll(_cssRules[element.localName]!);
-                    for (final className in element.classes) {
-                      final classSelector = '.$className';
-                      if (_cssRules.containsKey(classSelector))
-                        appliedStyles.addAll(_cssRules[classSelector]!);
-                      final tagAndClassSelector =
-                          '${element.localName}$classSelector';
-                      if (_cssRules.containsKey(tagAndClassSelector))
-                        appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
-                    }
-                    if (element.id.isNotEmpty) {
-                      final idSelector = '#${element.id}';
-                      if (_cssRules.containsKey(idSelector))
-                        appliedStyles.addAll(_cssRules[idSelector]!);
-                    }
+                      // Apply styles based on specificity
+                      if (_cssRules.containsKey('*'))
+                        appliedStyles.addAll(_cssRules['*']!);
+                      if (_cssRules.containsKey(element.localName))
+                        appliedStyles.addAll(_cssRules[element.localName]!);
+                      for (final className in element.classes) {
+                        final classSelector = '.$className';
+                        if (_cssRules.containsKey(classSelector))
+                          appliedStyles.addAll(_cssRules[classSelector]!);
+                        final tagAndClassSelector =
+                            '${element.localName}$classSelector';
+                        if (_cssRules.containsKey(tagAndClassSelector))
+                          appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
+                      }
+                      if (element.id.isNotEmpty) {
+                        final idSelector = '#${element.id}';
+                        if (_cssRules.containsKey(idSelector))
+                          appliedStyles.addAll(_cssRules[idSelector]!);
+                      }
 
-                    // Heuristics for centering
-                    if ([
-                          'h1',
-                          'h2',
-                          'h3',
-                          'h4',
-                          'h5',
-                          'h6',
-                        ].contains(element.localName) ||
-                        element.classes.any((c) => c.contains('center'))) {
-                      appliedStyles['text-align'] = 'center';
-                    }
-                    if (element.localName == 'p' &&
-                        element.text.trim().isEmpty &&
-                        element.innerHtml.contains('<img')) {
-                      appliedStyles['text-align'] = 'center';
-                      appliedStyles['margin'] = '0';
-                    }
-                    if (element.localName == 'div' &&
-                        element.children.length == 1 &&
-                        (element.children.first.localName == 'svg' ||
-                            element.children.first.localName == 'img')) {
-                      appliedStyles['text-align'] = 'center';
-                    }
+                      // Heuristics for centering
+                      if ([
+                            'h1',
+                            'h2',
+                            'h3',
+                            'h4',
+                            'h5',
+                            'h6',
+                          ].contains(element.localName) ||
+                          element.classes.any((c) => c.contains('center'))) {
+                        appliedStyles['text-align'] = 'center';
+                      }
+                      if (element.localName == 'p' &&
+                          element.text.trim().isEmpty &&
+                          element.innerHtml.contains('<img')) {
+                        appliedStyles['text-align'] = 'center';
+                        appliedStyles['margin'] = '0';
+                      }
+                      if (element.localName == 'div' &&
+                          element.children.length == 1 &&
+                          (element.children.first.localName == 'svg' ||
+                              element.children.first.localName == 'img')) {
+                        appliedStyles['text-align'] = 'center';
+                      }
 
-                    if (appliedStyles.isEmpty) return null;
+                      if (appliedStyles.isEmpty) return null;
 
-                    final finalStyles = <String, String>{};
-                    final isImage = [
-                      'img',
-                      'svg',
-                      'image',
-                    ].contains(element.localName);
+                      final finalStyles = <String, String>{};
+                      final isImage = [
+                        'img',
+                        'svg',
+                        'image',
+                      ].contains(element.localName);
 
-                    appliedStyles.forEach((key, value) {
-                      final cleanValue = value.replaceAll('+', '').trim();
-                      if (cleanValue.isEmpty) return;
+                      appliedStyles.forEach((key, value) {
+                        final cleanValue = value.replaceAll('+', '').trim();
+                        if (cleanValue.isEmpty) return;
+                        if (isImage) {
+                          switch (key) {
+                            case 'width':
+                            case 'height':
+                            case 'max-width':
+                            case 'max-height':
+                            case 'margin':
+                            case 'padding':
+                            case 'border':
+                              finalStyles[key] = cleanValue;
+                              break;
+                          }
+                          return;
+                        }
 
-                      if (isImage) {
                         switch (key) {
-                          case 'width':
-                          case 'height':
-                          case 'max-width':
-                          case 'max-height':
-                          case 'margin':
-                          case 'padding':
-                          case 'border':
+                          // case 'font-size':
+                          //   String finalSize;
+                          //   // If value already has a unit, pass it through. Otherwise, apply a heuristic.
+                          //   if (RegExp(r'(px|%|em|rem|pt|pc|in|cm|mm)$', caseSensitive: false).hasMatch(cleanValue)) {
+                          //     finalSize = cleanValue;
+                          //   } else {
+                          //     final numericValue = double.tryParse(cleanValue);
+                          //     if (numericValue != null) {
+                          //       // Heuristic: Small numbers (likely 'em'), large numbers (likely '%').
+                          //       if (numericValue < 10) {
+                          //         finalSize = '${numericValue}em';
+                          //       } else {
+                          //         finalSize = '${numericValue}%';
+                          //       }
+                          //     } else {
+                          //       finalSize = cleanValue;
+                          //     }
+                          //   }
+                          //   finalStyles[key] = finalSize;
+                          //   break;
+                          // case 'font-size':
+                          //   finalStyles[key] = normalizeCssFontSize(cleanValue);
+                          //   break;
+
+                          case 'line-height':
+                            String finalHeight;
+                            final numericValue = double.tryParse(cleanValue);
+                            if (numericValue != null) {
+                              if (numericValue > 10) {
+                                finalHeight = (numericValue / 100).toString();
+                              } else {
+                                finalHeight = numericValue.toString();
+                              }
+                            } else {
+                              finalHeight = cleanValue;
+                            }
+                            finalStyles[key] = finalHeight;
+                            break;
+
+                          // case 'margin':
+                          // case 'margin-top':
+                          // case 'margin-bottom':
+                          // case 'margin-left':
+                          // case 'margin-right':
+                          // case 'padding':
+                          // case 'padding-top':
+                          // case 'padding-bottom':
+                          // case 'padding-left':
+                          // case 'padding-right':
+                          // case 'text-indent':
+                          //   String finalValue;
+                          //   if (cleanValue.toLowerCase().endsWith('px') ||
+                          //       cleanValue.toLowerCase().endsWith('%')) {
+                          //     finalValue = cleanValue;
+                          //   } else {
+                          //     final numericValue = double.tryParse(
+                          //       cleanValue.replaceAll(
+                          //         RegExp(r'em', caseSensitive: false),
+                          //         '',
+                          //       ),
+                          //     );
+                          //     if (numericValue != null) {
+                          //       final newSize = numericValue * baseFontSize;
+                          //       finalValue = '${newSize}px';
+                          //     } else {
+                          //       finalValue = cleanValue;
+                          //     }
+                          //   }
+                          //   finalStyles[key] = finalValue;
+                          //   break;
+
+                          case 'color':
+                          case 'background-color':
+                            finalStyles[key] = _formatColorValue(cleanValue);
+                            break;
+
+                          default:
                             finalStyles[key] = cleanValue;
                             break;
                         }
-                        return;
-                      }
+                      });
 
-                      switch (key) {
-                        // case 'font-size':
-                        //   String finalSize;
-                        //   // If value already has a unit, pass it through. Otherwise, apply a heuristic.
-                        //   if (RegExp(r'(px|%|em|rem|pt|pc|in|cm|mm)$', caseSensitive: false).hasMatch(cleanValue)) {
-                        //     finalSize = cleanValue;
-                        //   } else {
-                        //     final numericValue = double.tryParse(cleanValue);
-                        //     if (numericValue != null) {
-                        //       // Heuristic: Small numbers (likely 'em'), large numbers (likely '%').
-                        //       if (numericValue < 10) {
-                        //         finalSize = '${numericValue}em';
-                        //       } else {
-                        //         finalSize = '${numericValue}%';
-                        //       }
-                        //     } else {
-                        //       finalSize = cleanValue;
-                        //     }
-                        //   }
-                        //   finalStyles[key] = finalSize;
-                        //   break;
-                        // case 'font-size':
-                        //   finalStyles[key] = normalizeCssFontSize(cleanValue);
-                        //   break;
-
-                        case 'line-height':
-                          String finalHeight;
-                          final numericValue = double.tryParse(cleanValue);
-                          if (numericValue != null) {
-                            if (numericValue > 10) {
-                              finalHeight = (numericValue / 100).toString();
-                            } else {
-                              finalHeight = numericValue.toString();
-                            }
-                          } else {
-                            finalHeight = cleanValue;
-                          }
-                          finalStyles[key] = finalHeight;
-                          break;
-
-                        // case 'margin':
-                        // case 'margin-top':
-                        // case 'margin-bottom':
-                        // case 'margin-left':
-                        // case 'margin-right':
-                        // case 'padding':
-                        // case 'padding-top':
-                        // case 'padding-bottom':
-                        // case 'padding-left':
-                        // case 'padding-right':
-                        // case 'text-indent':
-                        //   String finalValue;
-                        //   if (cleanValue.toLowerCase().endsWith('px') ||
-                        //       cleanValue.toLowerCase().endsWith('%')) {
-                        //     finalValue = cleanValue;
-                        //   } else {
-                        //     final numericValue = double.tryParse(
-                        //       cleanValue.replaceAll(
-                        //         RegExp(r'em', caseSensitive: false),
-                        //         '',
-                        //       ),
-                        //     );
-                        //     if (numericValue != null) {
-                        //       final newSize = numericValue * baseFontSize;
-                        //       finalValue = '${newSize}px';
-                        //     } else {
-                        //       finalValue = cleanValue;
-                        //     }
-                        //   }
-                        //   finalStyles[key] = finalValue;
-                        //   break;
-
-                        case 'color':
-                        case 'background-color':
-                          finalStyles[key] = _formatColorValue(cleanValue);
-                          break;
-
-                        default:
-                          finalStyles[key] = cleanValue;
-                          break;
-                      }
-                    });
-
-                    return finalStyles.isNotEmpty ? finalStyles : null;
-                  },
+                      return finalStyles.isNotEmpty ? finalStyles : null;
+                    },
+                  ),
                 ),
               );
             },

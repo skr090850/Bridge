@@ -10,21 +10,21 @@ import 'package:csslib/visitor.dart' hide MediaQuery;
 import 'package:html/dom.dart' as dom;
 import 'package:flutter/foundation.dart';
 
-class EpubViewerScreenCopy extends StatefulWidget {
+class EpubViewer extends StatefulWidget {
   final String filePath;
   final String fileName;
 
-  const EpubViewerScreenCopy({
+  const EpubViewer({
     Key? key,
     required this.filePath,
     required this.fileName,
   }) : super(key: key);
 
   @override
-  State<EpubViewerScreenCopy> createState() => _EpubViewerScreenCopyState();
+  State<EpubViewer> createState() => _EpubViewerScreenCopyState();
 }
 
-class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
+class _EpubViewerScreenCopyState extends State<EpubViewer> {
   bool _loading = true;
   EpubBook? _book;
   bool _isFixedLayout = false;
