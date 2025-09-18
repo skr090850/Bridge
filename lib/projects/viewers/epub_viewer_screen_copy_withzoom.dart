@@ -9,6 +9,8 @@ import 'package:csslib/parser.dart' as cssparser;
 import 'package:csslib/visitor.dart' hide MediaQuery;
 import 'package:html/dom.dart' as dom;
 import 'package:flutter/foundation.dart';
+import 'package:bridge/projects/viewers/search_screen.dart';
+import 'package:flutter/services.dart';
 
 class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
@@ -68,6 +70,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
 
   @override
   void dispose() {
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     _pageController.dispose();
     _transformationController.removeListener(_onScaleChanged);
     _transformationController.dispose();
@@ -695,11 +698,11 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   void _showSettingsBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      // StatefulBuilder ka istemaal karein taaki sheet ke andar state update ho sake
       builder: (BuildContext bc) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setStateSheet) {
-            return Container(
+            return SingleChildScrollView(
+            child: Container(
               padding: const EdgeInsets.all(16.0),
               child: Wrap(
                 // Wrap widget ka istemaal karein taaki content fit ho jaaye
@@ -730,14 +733,21 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                   ListTile(
                     leading: const Icon(Icons.search),
                     title: const Text('Search in Book'),
-                    onTap: () {
-                      Navigator.pop(context); // Sheet ko band karein
-                      // Yahan search screen par navigate karne ka code likhein
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Search functionality coming soon!'),
-                        ),
-                      );
+                    onTap: ()async {
+                     if (_book == null || _book!.Chapters!.isEmpty) return;
+
+                    // SearchScreen par navigate karein aur result ka intezaar karein
+                    final selectedChapter = await Navigator.push<int>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SearchScreen(chapters: _book!.Chapters!),
+                      ),
+                    );
+
+                    // Agar user ne koi result select kiya hai, to us chapter par jump karein
+                    if (selectedChapter != null && mounted) {
+                      _pageController.jumpToPage(selectedChapter);
+                    }
                     },
                   ),
                   const Divider(),
@@ -747,17 +757,25 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                     leading: const Icon(Icons.screen_rotation),
                     title: const Text('Rotate Screen'),
                     onTap: () {
-                      Navigator.pop(context); // Sheet ko band karein
-                      // Yahan screen rotate karne ka code likhein
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Rotation functionality coming soon!'),
-                        ),
-                      );
+                      final currentOrientation = MediaQuery.of(context).orientation;
+
+                    // Agar portrait hai to landscape karein, warna portrait karein
+                    if (currentOrientation == Orientation.portrait) {
+                      SystemChrome.setPreferredOrientations([
+                        DeviceOrientation.landscapeRight,
+                        DeviceOrientation.landscapeLeft,
+                      ]);
+                    } else {
+                      SystemChrome.setPreferredOrientations([
+                        DeviceOrientation.portraitUp,
+                        DeviceOrientation.portraitDown,
+                      ]);
+                    }
                     },
                   ),
                 ],
               ),
+            )
             );
           },
         );
