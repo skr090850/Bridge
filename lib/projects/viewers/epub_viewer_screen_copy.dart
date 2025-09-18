@@ -139,15 +139,10 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       final bytes = await file.readAsBytes();
       EpubBook book = await EpubReader.readBook(bytes);
 
-      // --- START: DEFINITIVE FALLBACK LOGIC ---
-      // The "spine" is the definitive list of content in reading order.
       final spineItems = book.Schema?.Package?.Spine?.Items;
       final manifestItems = book.Schema?.Package?.Manifest?.Items;
       final htmlFiles = book.Content?.Html;
 
-      // **THE REAL FIX:** Check if the number of chapters parsed from the TOC
-      // is less than the actual number of content documents listed in the spine.
-      // This detects partially broken TOC files.
       if (spineItems != null && (book.Chapters == null || book.Chapters!.length < spineItems.length)) {
         
         debugPrint(
@@ -177,13 +172,11 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
             }
           }
 
-          // If we successfully built a new list, replace the old one.
           if (newChapters.isNotEmpty) {
             book.Chapters = newChapters;
           }
         }
       }
-      // --- END: DEFINITIVE FALLBACK LOGIC ---
 
       final images = <String, Uint8List>{};
       book.Content?.Images?.forEach((key, value) {

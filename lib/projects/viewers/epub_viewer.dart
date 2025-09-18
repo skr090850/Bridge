@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:csslib/parser.dart' as cssparser;
 import 'package:csslib/visitor.dart' hide MediaQuery;
 import 'package:html/dom.dart' as dom;
+import 'package:flutter/foundation.dart';
 
 class EpubViewer extends StatefulWidget {
   final String filePath;
@@ -32,6 +33,26 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
   int _currentChapter = 0;
   final PageController _pageController = PageController();
 
+  /// Cleans the HTML content by removing unwanted tags and whitespace.
+  String _cleanHtml(String html) {
+    // 1. Remove multiple <br> tags and replace them with a single one.
+    html = html.replaceAll(
+      RegExp(r'(<br\s*\/?>\s*){2,}', caseSensitive: false),
+      '<br>',
+    );
+
+    // 2. Remove empty <p> tags that only contain whitespace or &nbsp;
+    html = html.replaceAll(
+      RegExp(r'<p[^>]*>(\s|&nbsp;)*<\/p>', caseSensitive: false),
+      '',
+    );
+
+    // 3. Remove whitespace between tags to prevent unwanted space rendering.
+    html = html.replaceAll(RegExp(r'>\s+<', caseSensitive: false), '><');
+
+    return html.trim();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -50,8 +71,9 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
       return;
     }
 
-    final allCssContent =
-        _book!.Content!.Css!.values.map((cssFile) => cssFile.Content).join('\n');
+    final allCssContent = _book!.Content!.Css!.values
+        .map((cssFile) => cssFile.Content)
+        .join('\n');
 
     if (allCssContent.trim().isEmpty) {
       return;
@@ -72,16 +94,89 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
       styleSheet.visit(visitor);
     } catch (e) {
       // In a real app, you might want to log this error.
-      // For example: print("Failed to parse CSS: $e");
+      debugPrint("Failed to parse CSS: $e");
     }
   }
 
   /// Loads the EPUB book from the file path provided.
+  // Future<void> _loadBook() async {
+  //   try {
+  //     final file = File(widget.filePath);
+  //     final bytes = await file.readAsBytes();
+  //     final book = await EpubReader.readBook(bytes);
+
+  //     final images = <String, Uint8List>{};
+  //     book.Content?.Images?.forEach((key, value) {
+  //       if (value.Content != null) {
+  //         images[key] = Uint8List.fromList(value.Content!);
+  //       }
+  //     });
+
+  //     if (!mounted) return;
+
+  //     setState(() {
+  //       _book = book;
+  //       _images = images;
+  //       _parseCssFromBook();
+  //     });
+  //   } catch (e) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(
+  //         context,
+  //       ).showSnackBar(SnackBar(content: Text("Failed to open EPUB: $e")));
+  //     }
+  //   } finally {
+  //     if (mounted) {
+  //       setState(() => _loading = false);
+  //     }
+  //   }
+  // }
+  /// Loads the EPUB book from the file path provided, with a definitive fallback logic
+  /// that compares chapter count with the book's spine.
   Future<void> _loadBook() async {
     try {
       final file = File(widget.filePath);
       final bytes = await file.readAsBytes();
-      final book = await EpubReader.readBook(bytes);
+      EpubBook book = await EpubReader.readBook(bytes);
+
+      final spineItems = book.Schema?.Package?.Spine?.Items;
+      final manifestItems = book.Schema?.Package?.Manifest?.Items;
+      final htmlFiles = book.Content?.Html;
+
+      if (spineItems != null && (book.Chapters == null || book.Chapters!.length < spineItems.length)) {
+        
+        debugPrint(
+            "TOC is incomplete. Rebuilding chapters from spine. Spine items: ${spineItems.length}, Parsed chapters: ${book.Chapters?.length ?? 0}");
+
+        if (manifestItems != null && htmlFiles != null) {
+          final newChapters = <EpubChapter>[];
+          
+          for (final spineItem in spineItems) {
+            final manifestItem = manifestItems.firstWhere(
+              (item) => item.Id == spineItem.IdRef,
+              orElse: () => EpubManifestItem(),
+            );
+
+            if (manifestItem.Href != null &&
+                htmlFiles.containsKey(manifestItem.Href)) {
+              final htmlFile = htmlFiles[manifestItem.Href!];
+              newChapters.add(
+                EpubChapter()
+                  ..Title = manifestItem.Href!
+                      .split('/')
+                      .last
+                      .replaceAll(RegExp(r'\.x?html$', caseSensitive: false), '')
+                  ..ContentFileName = manifestItem.Href
+                  ..HtmlContent = htmlFile?.Content,
+              );
+            }
+          }
+
+          if (newChapters.isNotEmpty) {
+            book.Chapters = newChapters;
+          }
+        }
+      }
 
       final images = <String, Uint8List>{};
       book.Content?.Images?.forEach((key, value) {
@@ -174,16 +269,35 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
   String _formatColorValue(String cssColor) {
     final lowerCssColor = cssColor.toLowerCase().trim();
     const colorMap = {
-      'black': '#000000', 'silver': '#C0C0C0', 'gray': '#808080', 'white': '#FFFFFF',
-      'maroon': '#800000', 'red': '#FF0000', 'purple': '#800080', 'fuchsia': '#FF00FF',
-      'green': '#008000', 'lime': '#00FF00', 'olive': '#808000', 'yellow': '#FFFF00',
-      'navy': '#000080', 'blue': '#0000FF', 'teal': '#008080', 'aqua': '#00FFFF',
+      'black': '#000000',
+      'silver': '#C0C0C0',
+      'gray': '#808080',
+      'white': '#FFFFFF',
+      'maroon': '#800000',
+      'red': '#FF0000',
+      'purple': '#800080',
+      'fuchsia': '#FF00FF',
+      'green': '#008000',
+      'lime': '#00FF00',
+      'olive': '#808000',
+      'yellow': '#FFFF00',
+      'navy': '#000080',
+      'blue': '#0000FF',
+      'teal': '#008080',
+      'aqua': '#00FFFF',
       'transparent': 'transparent',
     };
-    if (RegExp(r'^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$').hasMatch(lowerCssColor)) return lowerCssColor;
-    if (lowerCssColor.startsWith('rgb') || lowerCssColor.startsWith('hsl')) return lowerCssColor.replaceAll(RegExp(r'\s*,\s*'), ',').replaceAll(RegExp(r'\s+'), ' ');
+    if (RegExp(
+      r'^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$',
+    ).hasMatch(lowerCssColor))
+      return lowerCssColor;
+    if (lowerCssColor.startsWith('rgb') || lowerCssColor.startsWith('hsl'))
+      return lowerCssColor
+          .replaceAll(RegExp(r'\s*,\s*'), ',')
+          .replaceAll(RegExp(r'\s+'), ' ');
     if (colorMap.containsKey(lowerCssColor)) return colorMap[lowerCssColor]!;
-    if (RegExp(r'^([0-9a-f]{3}|[0-9a-f]{6})$').hasMatch(lowerCssColor)) return '#$lowerCssColor';
+    if (RegExp(r'^([0-9a-f]{3}|[0-9a-f]{6})$').hasMatch(lowerCssColor))
+      return '#$lowerCssColor';
     return cssColor;
   }
 
@@ -199,12 +313,13 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
     if (_book == null || _book!.Chapters!.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(widget.fileName)),
-        body: const Center(child: Text("Book could not be loaded or is empty.")),
+        body: const Center(
+          child: Text("Book could not be loaded or is empty."),
+        ),
       );
     }
 
     const double baseFontSize = 18.0;
-    const double spacingMultiplier = 4.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -251,7 +366,9 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
               if (htmlContent.isNotEmpty && chapterTitle.isNotEmpty) {
                 try {
                   var document = dom.Document.html(htmlContent);
-                  final potentialTitles = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p');
+                  final potentialTitles = document.querySelectorAll(
+                    'h1, h2, h3, h4, h5, h6, p',
+                  );
                   for (var element in potentialTitles) {
                     if (element.text.trim().toLowerCase() == chapterTitle) {
                       element.remove();
@@ -263,137 +380,180 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
                   // Ignore parsing errors for title removal
                 }
               }
+              final cleanedHtml = _cleanHtml(htmlContent);
 
-              final processedHtml = _embedImagesInHtml(htmlContent, chapter.ContentFileName);
+              final processedHtml = _embedImagesInHtml(
+                htmlContent,
+                chapter.ContentFileName,
+              );
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 60.0),
                 child: HtmlWidget(
                   processedHtml,
-                  textStyle: const TextStyle(fontSize: baseFontSize, height: 1.5, color: Color(0xFF5D4037)),
+                  textStyle: const TextStyle(
+                    fontSize: baseFontSize,
+                    height: 1.5,
+                    color: Color(0xFF5D4037),
+                  ),
                   customStylesBuilder: (element) {
+                    if (element.localName == 'p' &&
+                        element.text.trim().isEmpty &&
+                        !element.innerHtml.contains('<img')) {
+                      return {'height': '0', 'margin': '0', 'padding': '0'};
+                    }
                     final appliedStyles = <String, String>{};
 
                     // Apply styles based on specificity
-                    if (_cssRules.containsKey('*')) appliedStyles.addAll(_cssRules['*']!);
-                    if (_cssRules.containsKey(element.localName)) appliedStyles.addAll(_cssRules[element.localName]!);
+                    if (_cssRules.containsKey('*'))
+                      appliedStyles.addAll(_cssRules['*']!);
+                    if (_cssRules.containsKey(element.localName))
+                      appliedStyles.addAll(_cssRules[element.localName]!);
                     for (final className in element.classes) {
                       final classSelector = '.$className';
-                      if (_cssRules.containsKey(classSelector)) appliedStyles.addAll(_cssRules[classSelector]!);
-                      final tagAndClassSelector = '${element.localName}$classSelector';
-                      if (_cssRules.containsKey(tagAndClassSelector)) appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
+                      if (_cssRules.containsKey(classSelector))
+                        appliedStyles.addAll(_cssRules[classSelector]!);
+                      final tagAndClassSelector =
+                          '${element.localName}$classSelector';
+                      if (_cssRules.containsKey(tagAndClassSelector))
+                        appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
                     }
                     if (element.id.isNotEmpty) {
                       final idSelector = '#${element.id}';
-                      if (_cssRules.containsKey(idSelector)) appliedStyles.addAll(_cssRules[idSelector]!);
+                      if (_cssRules.containsKey(idSelector))
+                        appliedStyles.addAll(_cssRules[idSelector]!);
                     }
-                    
+
                     // Heuristics for centering
-                    if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].contains(element.localName) || element.classes.any((c) => c.contains('center'))) {
-                       appliedStyles['text-align'] = 'center';
+                    if ([
+                          'h1',
+                          'h2',
+                          'h3',
+                          'h4',
+                          'h5',
+                          'h6',
+                        ].contains(element.localName) ||
+                        element.classes.any((c) => c.contains('center'))) {
+                      appliedStyles['text-align'] = 'center';
                     }
-                    
-                    if (element.localName == 'p' && element.text.trim().isEmpty && element.innerHtml.contains('<img')) {
+                    if (element.localName == 'p' &&
+                        element.text.trim().isEmpty &&
+                        element.innerHtml.contains('<img')) {
                       appliedStyles['text-align'] = 'center';
                       appliedStyles['margin'] = '0';
                     }
-                     if (element.localName == 'div' && element.children.length == 1 && (element.children.first.localName == 'svg' || element.children.first.localName == 'img')) {
-                       appliedStyles['text-align'] = 'center';
+                    if (element.localName == 'div' &&
+                        element.children.length == 1 &&
+                        (element.children.first.localName == 'svg' ||
+                            element.children.first.localName == 'img')) {
+                      appliedStyles['text-align'] = 'center';
                     }
-
 
                     if (appliedStyles.isEmpty) return null;
 
                     final finalStyles = <String, String>{};
-                    final isImage = ['img', 'svg', 'image'].contains(element.localName);
+                    final isImage = [
+                      'img',
+                      'svg',
+                      'image',
+                    ].contains(element.localName);
 
                     appliedStyles.forEach((key, value) {
                       final cleanValue = value.replaceAll('+', '').trim();
                       if (cleanValue.isEmpty) return;
-                      
-                      // Apply only relevant styles to images
+
                       if (isImage) {
                         switch (key) {
-                           case 'width':
-                           case 'height':
-                           case 'max-width':
-                           case 'max-height':
-                           case 'margin':
-                           case 'padding':
-                           case 'border':
-                             finalStyles[key] = cleanValue;
-                             break;
+                          case 'width':
+                          case 'height':
+                          case 'max-width':
+                          case 'max-height':
+                          case 'margin':
+                          case 'padding':
+                          case 'border':
+                            finalStyles[key] = cleanValue;
+                            break;
                         }
                         return;
                       }
 
-                      // Apply text styles
                       switch (key) {
-                        case 'font-size':
-                          String finalSize;
-                          if (cleanValue.toLowerCase().endsWith('px') || cleanValue.toLowerCase().endsWith('%')) {
-                            finalSize = cleanValue;
-                          } else {
-                            final numericValue = double.tryParse(cleanValue.replaceAll(RegExp(r'em', caseSensitive: false),''));
-                            if (numericValue != null) {
-                              if (numericValue < 10) { // Assume em
-                                finalSize = (numericValue * baseFontSize).toString();
-                              } else { // Assume percentage-like value from 100
-                                finalSize = ((numericValue / 100) * baseFontSize).toString();
-                              }
-                            } else {
-                              finalSize = cleanValue;
-                            }
-                          }
-                          finalStyles[key] = finalSize;
-                          break;
+                        // case 'font-size':
+                        //   String finalSize;
+                        //   // If value already has a unit, pass it through. Otherwise, apply a heuristic.
+                        //   if (RegExp(r'(px|%|em|rem|pt|pc|in|cm|mm)$', caseSensitive: false).hasMatch(cleanValue)) {
+                        //     finalSize = cleanValue;
+                        //   } else {
+                        //     final numericValue = double.tryParse(cleanValue);
+                        //     if (numericValue != null) {
+                        //       // Heuristic: Small numbers (likely 'em'), large numbers (likely '%').
+                        //       if (numericValue < 10) {
+                        //         finalSize = '${numericValue}em';
+                        //       } else {
+                        //         finalSize = '${numericValue}%';
+                        //       }
+                        //     } else {
+                        //       finalSize = cleanValue;
+                        //     }
+                        //   }
+                        //   finalStyles[key] = finalSize;
+                        //   break;
+                        // case 'font-size':
+                        //   finalStyles[key] = normalizeCssFontSize(cleanValue);
+                        //   break;
 
                         case 'line-height':
                           String finalHeight;
                           final numericValue = double.tryParse(cleanValue);
-                           if (numericValue != null) {
-                             if (numericValue > 10) { // e.g., 120 -> 1.2
-                               finalHeight = (numericValue / 100).toString();
-                             } else { // e.g., 1.6
-                               finalHeight = numericValue.toString();
-                             }
-                           } else {
-                             finalHeight = cleanValue;
-                           }
-                           finalStyles[key] = finalHeight;
-                           break;
+                          if (numericValue != null) {
+                            if (numericValue > 10) {
+                              finalHeight = (numericValue / 100).toString();
+                            } else {
+                              finalHeight = numericValue.toString();
+                            }
+                          } else {
+                            finalHeight = cleanValue;
+                          }
+                          finalStyles[key] = finalHeight;
+                          break;
 
-                        case 'margin':
-                        case 'margin-top':
-                        case 'margin-bottom':
-                        case 'margin-left':
-                        case 'margin-right':
-                        case 'padding':
-                        case 'padding-top':
-                        case 'padding-bottom':
-                        case 'padding-left':
-                        case 'padding-right':
-                        case 'text-indent':
-                          String finalValue;
-                           if (cleanValue.toLowerCase().endsWith('px') || cleanValue.toLowerCase().endsWith('%')) {
-                             finalValue = cleanValue;
-                           } else {
-                             final numericValue = double.tryParse(cleanValue.replaceAll(RegExp(r'em', caseSensitive: false),''));
-                             if (numericValue != null) {
-                               final newSize = numericValue * spacingMultiplier;
-                               finalValue = '${newSize}px';
-                             } else {
-                               finalValue = cleanValue;
-                             }
-                           }
-                           finalStyles[key] = finalValue;
-                           break;
+                        // case 'margin':
+                        // case 'margin-top':
+                        // case 'margin-bottom':
+                        // case 'margin-left':
+                        // case 'margin-right':
+                        // case 'padding':
+                        // case 'padding-top':
+                        // case 'padding-bottom':
+                        // case 'padding-left':
+                        // case 'padding-right':
+                        // case 'text-indent':
+                        //   String finalValue;
+                        //   if (cleanValue.toLowerCase().endsWith('px') ||
+                        //       cleanValue.toLowerCase().endsWith('%')) {
+                        //     finalValue = cleanValue;
+                        //   } else {
+                        //     final numericValue = double.tryParse(
+                        //       cleanValue.replaceAll(
+                        //         RegExp(r'em', caseSensitive: false),
+                        //         '',
+                        //       ),
+                        //     );
+                        //     if (numericValue != null) {
+                        //       final newSize = numericValue * baseFontSize;
+                        //       finalValue = '${newSize}px';
+                        //     } else {
+                        //       finalValue = cleanValue;
+                        //     }
+                        //   }
+                        //   finalStyles[key] = finalValue;
+                        //   break;
 
                         case 'color':
                         case 'background-color':
                           finalStyles[key] = _formatColorValue(cleanValue);
                           break;
-                        
+
                         default:
                           finalStyles[key] = cleanValue;
                           break;
@@ -413,7 +573,9 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
             child: Container(
               height: 50,
               padding: const EdgeInsets.symmetric(vertical: 4.0),
-              color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
+              color: Theme.of(
+                context,
+              ).scaffoldBackgroundColor.withOpacity(0.95),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
@@ -431,7 +593,10 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
                   const SizedBox(height: 2),
                   Text(
                     'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
-                    style: TextStyle(fontSize: 12.0, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 12.0,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                 ],
               ),
@@ -441,6 +606,56 @@ class _EpubViewerScreenCopyState extends State<EpubViewer> {
       ),
     );
   }
+
+  //   String normalizeCssFontSize(String cleanValue) {
+  //     const double baseFontSize = 16.0;
+  //     double finalFontSize = 14.0; // default
+
+  //     final sizeRegex = RegExp(
+  //       r'^([0-9.]+)(px|em|rem|%|pt|pc|in|cm|mm)?$',
+  //       caseSensitive: false,
+  //     );
+  //     final match = sizeRegex.firstMatch(cleanValue);
+
+  //     if (match != null) {
+  //       final numericValue = double.tryParse(match.group(1)!);
+  //       final unit = (match.group(2) ?? 'px').toLowerCase();
+
+  //       if (numericValue != null) {
+  //         switch (unit) {
+  //           case 'px':
+  //             finalFontSize = numericValue;
+  //             break;
+  //           case 'em':
+  //           case 'rem':
+  //             finalFontSize = numericValue * baseFontSize;
+  //             break;
+  //           case '%':
+  //             finalFontSize = baseFontSize * (numericValue / 100);
+  //             break;
+  //           case 'pt':
+  //             finalFontSize = numericValue * 1.333;
+  //             break;
+  //           case 'pc':
+  //             finalFontSize = numericValue * 16.0;
+  //             break;
+  //           case 'in':
+  //             finalFontSize = numericValue * 96.0;
+  //             break;
+  //           case 'cm':
+  //             finalFontSize = numericValue * 37.8;
+  //             break;
+  //           case 'mm':
+  //             finalFontSize = numericValue * 3.78;
+  //             break;
+  //           default:
+  //             finalFontSize = numericValue;
+  //         }
+  //       }
+  //     }
+
+  //     return finalFontSize.toString();
+  //   }
 }
 
 class _CssVisitor extends Visitor {
@@ -456,7 +671,11 @@ class _CssVisitor extends Visitor {
   @override
   void visitRuleSet(RuleSet node) {
     final selector =
-        node.selectorGroup?.selectors.map((s) => s.span?.text ?? '').where((s) => s.isNotEmpty).join(', ') ?? '';
+        node.selectorGroup?.selectors
+            .map((s) => s.span?.text ?? '')
+            .where((s) => s.isNotEmpty)
+            .join(', ') ??
+        '';
 
     final declarations = <String, String>{};
     for (var declaration in node.declarationGroup.declarations) {
@@ -466,7 +685,8 @@ class _CssVisitor extends Visitor {
         if (declaration.expression != null) {
           value = _expressionToText(declaration.expression!);
         }
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        if ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))) {
           value = value.substring(1, value.length - 1);
         }
         declarations[property] = value;
@@ -523,4 +743,3 @@ class _CssPrinter extends Visitor {
     buffer.write(')');
   }
 }
-
