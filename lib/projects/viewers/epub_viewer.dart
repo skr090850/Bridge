@@ -1,0 +1,526 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:epubx/epubx.dart' hide Image;
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'package:path/path.dart' as p;
+import 'package:csslib/parser.dart' as cssparser;
+import 'package:csslib/visitor.dart' hide MediaQuery;
+import 'package:html/dom.dart' as dom;
+
+class EpubViewer extends StatefulWidget {
+  final String filePath;
+  final String fileName;
+
+  const EpubViewer({
+    Key? key,
+    required this.filePath,
+    required this.fileName,
+  }) : super(key: key);
+
+  @override
+  State<EpubViewer> createState() => _EpubViewerScreenCopyState();
+}
+
+class _EpubViewerScreenCopyState extends State<EpubViewer> {
+  bool _loading = true;
+  EpubBook? _book;
+  Map<String, Uint8List> _images = {};
+  final Map<String, Map<String, String>> _cssRules = {};
+
+  int _currentChapter = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBook();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// Parses all CSS content from the EPUB book and stores the rules.
+  void _parseCssFromBook() {
+    if (_book?.Content?.Css == null || _book!.Content!.Css!.isEmpty) {
+      return;
+    }
+
+    final allCssContent =
+        _book!.Content!.Css!.values.map((cssFile) => cssFile.Content).join('\n');
+
+    if (allCssContent.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      final styleSheet = cssparser.parse(allCssContent, errors: []);
+      final visitor = _CssVisitor(
+        onRule: (selector, declarations) {
+          final cleanSelector = selector.split('{').first.trim();
+          if (_cssRules.containsKey(cleanSelector)) {
+            _cssRules[cleanSelector]!.addAll(declarations);
+          } else {
+            _cssRules[cleanSelector] = declarations;
+          }
+        },
+      );
+      styleSheet.visit(visitor);
+    } catch (e) {
+      // In a real app, you might want to log this error.
+      // For example: print("Failed to parse CSS: $e");
+    }
+  }
+
+  /// Loads the EPUB book from the file path provided.
+  Future<void> _loadBook() async {
+    try {
+      final file = File(widget.filePath);
+      final bytes = await file.readAsBytes();
+      final book = await EpubReader.readBook(bytes);
+
+      final images = <String, Uint8List>{};
+      book.Content?.Images?.forEach((key, value) {
+        if (value.Content != null) {
+          images[key] = Uint8List.fromList(value.Content!);
+        }
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        _book = book;
+        _images = images;
+        _parseCssFromBook();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Failed to open EPUB: $e")));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  /// Finds image data by its path, resolving relative paths if necessary.
+  Uint8List? _findImageData(String imagePath, String? chapterPath) {
+    final decodedPath = Uri.decodeComponent(imagePath);
+    if (_images.containsKey(decodedPath)) return _images[decodedPath];
+
+    if (chapterPath != null) {
+      try {
+        final resolvedPath = p.url.normalize(
+          p.url.join(p.url.dirname(chapterPath), decodedPath),
+        );
+        if (_images.containsKey(resolvedPath)) return _images[resolvedPath];
+      } catch (_) {
+        // Path resolution can fail, ignore.
+      }
+    }
+
+    final imageName = p.basename(decodedPath);
+    for (final key in _images.keys) {
+      if (p.basename(key) == imageName) return _images[key];
+    }
+    return null;
+  }
+
+  /// Replaces image URLs in HTML with base64-encoded data URIs.
+  String _embedImagesInHtml(String htmlContent, String? chapterPath) {
+    final regex = RegExp(
+      r'''(<img[^>]*src\s*=\s*|<image[^>]*xlink:href\s*=\s*)"([^"]+)"''',
+      caseSensitive: false,
+    );
+    return htmlContent.replaceAllMapped(regex, (match) {
+      final tagPart = match.group(1)!;
+      final imagePath = match.group(2)!;
+      final imageData = _findImageData(imagePath, chapterPath);
+      if (imageData != null) {
+        final base64String = base64Encode(imageData);
+        final mimeType = _getMimeType(imagePath);
+        return '$tagPart"data:$mimeType;base64,$base64String"';
+      }
+      return match.input.substring(match.start, match.end);
+    });
+  }
+
+  /// Determines the MIME type of an image from its file extension.
+  String _getMimeType(String filename) {
+    final extension = p.extension(filename).toLowerCase();
+    switch (extension) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.gif':
+        return 'image/gif';
+      case '.svg':
+        return 'image/svg+xml';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  /// Formats a CSS color value into a format Flutter can understand.
+  String _formatColorValue(String cssColor) {
+    final lowerCssColor = cssColor.toLowerCase().trim();
+    const colorMap = {
+      'black': '#000000', 'silver': '#C0C0C0', 'gray': '#808080', 'white': '#FFFFFF',
+      'maroon': '#800000', 'red': '#FF0000', 'purple': '#800080', 'fuchsia': '#FF00FF',
+      'green': '#008000', 'lime': '#00FF00', 'olive': '#808000', 'yellow': '#FFFF00',
+      'navy': '#000080', 'blue': '#0000FF', 'teal': '#008080', 'aqua': '#00FFFF',
+      'transparent': 'transparent',
+    };
+    if (RegExp(r'^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$').hasMatch(lowerCssColor)) return lowerCssColor;
+    if (lowerCssColor.startsWith('rgb') || lowerCssColor.startsWith('hsl')) return lowerCssColor.replaceAll(RegExp(r'\s*,\s*'), ',').replaceAll(RegExp(r'\s+'), ' ');
+    if (colorMap.containsKey(lowerCssColor)) return colorMap[lowerCssColor]!;
+    if (RegExp(r'^([0-9a-f]{3}|[0-9a-f]{6})$').hasMatch(lowerCssColor)) return '#$lowerCssColor';
+    return cssColor;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.fileName)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_book == null || _book!.Chapters!.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.fileName)),
+        body: const Center(child: Text("Book could not be loaded or is empty.")),
+      );
+    }
+
+    const double baseFontSize = 18.0;
+    const double spacingMultiplier = 4.0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_book?.Title ?? widget.fileName),
+        actions: [
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.list_alt),
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
+              tooltip: 'Chapters',
+            ),
+          ),
+        ],
+      ),
+      endDrawer: Drawer(
+        child: ListView.builder(
+          itemCount: _book!.Chapters!.length,
+          itemBuilder: (context, index) {
+            final chapter = _book!.Chapters![index];
+            return ListTile(
+              title: Text(chapter.Title ?? 'Chapter ${index + 1}'),
+              selected: index == _currentChapter,
+              onTap: () {
+                _pageController.jumpToPage(index);
+                Navigator.of(context).pop();
+              },
+            );
+          },
+        ),
+      ),
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: _book!.Chapters!.length,
+            onPageChanged: (index) {
+              setState(() => _currentChapter = index);
+            },
+            itemBuilder: (context, index) {
+              final chapter = _book!.Chapters![index];
+              String htmlContent = chapter.HtmlContent ?? '';
+
+              final chapterTitle = chapter.Title?.trim().toLowerCase() ?? '';
+              if (htmlContent.isNotEmpty && chapterTitle.isNotEmpty) {
+                try {
+                  var document = dom.Document.html(htmlContent);
+                  final potentialTitles = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p');
+                  for (var element in potentialTitles) {
+                    if (element.text.trim().toLowerCase() == chapterTitle) {
+                      element.remove();
+                      break;
+                    }
+                  }
+                  htmlContent = document.body?.innerHtml ?? htmlContent;
+                } catch (e) {
+                  // Ignore parsing errors for title removal
+                }
+              }
+
+              final processedHtml = _embedImagesInHtml(htmlContent, chapter.ContentFileName);
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 60.0),
+                child: HtmlWidget(
+                  processedHtml,
+                  textStyle: const TextStyle(fontSize: baseFontSize, height: 1.5, color: Color(0xFF5D4037)),
+                  customStylesBuilder: (element) {
+                    final appliedStyles = <String, String>{};
+
+                    // Apply styles based on specificity
+                    if (_cssRules.containsKey('*')) appliedStyles.addAll(_cssRules['*']!);
+                    if (_cssRules.containsKey(element.localName)) appliedStyles.addAll(_cssRules[element.localName]!);
+                    for (final className in element.classes) {
+                      final classSelector = '.$className';
+                      if (_cssRules.containsKey(classSelector)) appliedStyles.addAll(_cssRules[classSelector]!);
+                      final tagAndClassSelector = '${element.localName}$classSelector';
+                      if (_cssRules.containsKey(tagAndClassSelector)) appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
+                    }
+                    if (element.id.isNotEmpty) {
+                      final idSelector = '#${element.id}';
+                      if (_cssRules.containsKey(idSelector)) appliedStyles.addAll(_cssRules[idSelector]!);
+                    }
+                    
+                    // Heuristics for centering
+                    if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].contains(element.localName) || element.classes.any((c) => c.contains('center'))) {
+                       appliedStyles['text-align'] = 'center';
+                    }
+                    
+                    if (element.localName == 'p' && element.text.trim().isEmpty && element.innerHtml.contains('<img')) {
+                      appliedStyles['text-align'] = 'center';
+                      appliedStyles['margin'] = '0';
+                    }
+                     if (element.localName == 'div' && element.children.length == 1 && (element.children.first.localName == 'svg' || element.children.first.localName == 'img')) {
+                       appliedStyles['text-align'] = 'center';
+                    }
+
+
+                    if (appliedStyles.isEmpty) return null;
+
+                    final finalStyles = <String, String>{};
+                    final isImage = ['img', 'svg', 'image'].contains(element.localName);
+
+                    appliedStyles.forEach((key, value) {
+                      final cleanValue = value.replaceAll('+', '').trim();
+                      if (cleanValue.isEmpty) return;
+                      
+                      // Apply only relevant styles to images
+                      if (isImage) {
+                        switch (key) {
+                           case 'width':
+                           case 'height':
+                           case 'max-width':
+                           case 'max-height':
+                           case 'margin':
+                           case 'padding':
+                           case 'border':
+                             finalStyles[key] = cleanValue;
+                             break;
+                        }
+                        return;
+                      }
+
+                      // Apply text styles
+                      switch (key) {
+                        case 'font-size':
+                          String finalSize;
+                          if (cleanValue.toLowerCase().endsWith('px') || cleanValue.toLowerCase().endsWith('%')) {
+                            finalSize = cleanValue;
+                          } else {
+                            final numericValue = double.tryParse(cleanValue.replaceAll(RegExp(r'em', caseSensitive: false),''));
+                            if (numericValue != null) {
+                              if (numericValue < 10) { // Assume em
+                                finalSize = (numericValue * baseFontSize).toString();
+                              } else { // Assume percentage-like value from 100
+                                finalSize = ((numericValue / 100) * baseFontSize).toString();
+                              }
+                            } else {
+                              finalSize = cleanValue;
+                            }
+                          }
+                          finalStyles[key] = finalSize;
+                          break;
+
+                        case 'line-height':
+                          String finalHeight;
+                          final numericValue = double.tryParse(cleanValue);
+                           if (numericValue != null) {
+                             if (numericValue > 10) { // e.g., 120 -> 1.2
+                               finalHeight = (numericValue / 100).toString();
+                             } else { // e.g., 1.6
+                               finalHeight = numericValue.toString();
+                             }
+                           } else {
+                             finalHeight = cleanValue;
+                           }
+                           finalStyles[key] = finalHeight;
+                           break;
+
+                        case 'margin':
+                        case 'margin-top':
+                        case 'margin-bottom':
+                        case 'margin-left':
+                        case 'margin-right':
+                        case 'padding':
+                        case 'padding-top':
+                        case 'padding-bottom':
+                        case 'padding-left':
+                        case 'padding-right':
+                        case 'text-indent':
+                          String finalValue;
+                           if (cleanValue.toLowerCase().endsWith('px') || cleanValue.toLowerCase().endsWith('%')) {
+                             finalValue = cleanValue;
+                           } else {
+                             final numericValue = double.tryParse(cleanValue.replaceAll(RegExp(r'em', caseSensitive: false),''));
+                             if (numericValue != null) {
+                               final newSize = numericValue * spacingMultiplier;
+                               finalValue = '${newSize}px';
+                             } else {
+                               finalValue = cleanValue;
+                             }
+                           }
+                           finalStyles[key] = finalValue;
+                           break;
+
+                        case 'color':
+                        case 'background-color':
+                          finalStyles[key] = _formatColorValue(cleanValue);
+                          break;
+                        
+                        default:
+                          finalStyles[key] = cleanValue;
+                          break;
+                      }
+                    });
+
+                    return finalStyles.isNotEmpty ? finalStyles : null;
+                  },
+                ),
+              );
+            },
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 50,
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      _book!.Chapters![_currentChapter].Title ?? '',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 14.0),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
+                    style: TextStyle(fontSize: 12.0, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CssVisitor extends Visitor {
+  final Function(String selector, Map<String, String> declarations) onRule;
+  _CssVisitor({required this.onRule});
+
+  String _expressionToText(Expression expr) {
+    final printer = StringBuffer();
+    expr.visit(_CssPrinter(printer));
+    return printer.toString().trim();
+  }
+
+  @override
+  void visitRuleSet(RuleSet node) {
+    final selector =
+        node.selectorGroup?.selectors.map((s) => s.span?.text ?? '').where((s) => s.isNotEmpty).join(', ') ?? '';
+
+    final declarations = <String, String>{};
+    for (var declaration in node.declarationGroup.declarations) {
+      if (declaration is Declaration) {
+        final property = declaration.property.toLowerCase();
+        var value = '';
+        if (declaration.expression != null) {
+          value = _expressionToText(declaration.expression!);
+        }
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.substring(1, value.length - 1);
+        }
+        declarations[property] = value;
+      }
+    }
+
+    if (selector.isNotEmpty && declarations.isNotEmpty) {
+      final simpleSelectors = selector.split(',');
+      for (var simpleSelector in simpleSelectors) {
+        if (simpleSelector.trim().isNotEmpty) {
+          onRule(simpleSelector.trim(), declarations);
+        }
+      }
+    }
+  }
+}
+
+class _CssPrinter extends Visitor {
+  final StringBuffer buffer;
+  _CssPrinter(this.buffer);
+
+  @override
+  void visitHexColorTerm(HexColorTerm node) => buffer.write(node.text);
+  @override
+  void visitLiteralTerm(LiteralTerm node) => buffer.write(node.text);
+  @override
+  void visitNumberTerm(NumberTerm node) => buffer.write(node.text);
+  @override
+  void visitPercentageTerm(PercentageTerm node) => buffer.write(node.text);
+  @override
+  void visitLengthTerm(LengthTerm node) => buffer.write(node.text);
+  @override
+  void visitEmTerm(EmTerm node) => buffer.write(node.text);
+  @override
+  void visitExTerm(ExTerm node) => buffer.write(node.text);
+  @override
+  void visitAngleTerm(AngleTerm node) => buffer.write(node.text);
+  @override
+  void visitTimeTerm(TimeTerm node) => buffer.write(node.text);
+  @override
+  void visitFreqTerm(FreqTerm node) => buffer.write(node.text);
+  @override
+  void visitUriTerm(UriTerm node) => buffer.write(node.text);
+
+  @override
+  void visitFunctionTerm(FunctionTerm node) {
+    buffer.write('${node.text}(');
+    for (int i = 0; i < node.params.length; i++) {
+      node.params[i].visit(this);
+      if (i < node.params.length - 1) {
+        buffer.write(',');
+      }
+    }
+    buffer.write(')');
+  }
+}
+
