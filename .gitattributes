@@ -1,0 +1,10 @@
+
+# Ignore auto-generated files
+*.html linguist-detectable=false
+*.xml linguist-detectable=false
+*.json linguist-detectable=false
+/build/* linguist-detectable=false
+/.dart_tool/* linguist-detectable=false
+
+# Force Dart detection
+*.dart linguist-language=Dart
