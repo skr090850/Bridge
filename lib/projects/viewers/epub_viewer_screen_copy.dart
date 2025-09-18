@@ -406,7 +406,8 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
               final cleanedHtml = _cleanHtml(htmlContent);
 
               final processedHtml = _embedImagesInHtml(
-                htmlContent,
+                // htmlContent,
+                cleanedHtml,
                 chapter.ContentFileName,
               );
 
@@ -446,7 +447,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                       if (_cssRules.containsKey(idSelector))
                         appliedStyles.addAll(_cssRules[idSelector]!);
                     }
-                    
+
                     // Heuristics for centering
                     if ([
                           'h1',
@@ -484,7 +485,6 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                     appliedStyles.forEach((key, value) {
                       final cleanValue = value.replaceAll('+', '').trim();
                       if (cleanValue.isEmpty) return;
-
                       if (isImage) {
                         switch (key) {
                           case 'width':
