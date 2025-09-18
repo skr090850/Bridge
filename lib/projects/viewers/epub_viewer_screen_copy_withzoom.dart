@@ -358,7 +358,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       );
     }
 
-    const double baseFontSize = 18.0;
+    const double baseFontSize = 14.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -389,272 +389,289 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
           },
         ),
       ),
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            // physics: _isZoomed
-            //     ? const NeverScrollableScrollPhysics()
-            //     : const PageScrollPhysics(),
-            itemCount: _book!.Chapters!.length,
-            onPageChanged: (index) {
-              setState(() => _currentChapter = index);
-              _transformationController.value = Matrix4.identity();
-            },
-            itemBuilder: (context, index) {
-              final chapter = _book!.Chapters![index];
-              String htmlContent = chapter.HtmlContent ?? '';
+      body: SafeArea(
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              // physics: _isZoomed
+              //     ? const NeverScrollableScrollPhysics()
+              //     : const PageScrollPhysics(),
+              itemCount: _book!.Chapters!.length,
+              onPageChanged: (index) {
+                setState(() => _currentChapter = index);
+                _transformationController.value = Matrix4.identity();
+              },
+              itemBuilder: (context, index) {
+                final chapter = _book!.Chapters![index];
+                String htmlContent = chapter.HtmlContent ?? '';
 
-              final chapterTitle = chapter.Title?.trim().toLowerCase() ?? '';
-              if (htmlContent.isNotEmpty && chapterTitle.isNotEmpty) {
-                try {
-                  var document = dom.Document.html(htmlContent);
-                  final potentialTitles = document.querySelectorAll(
-                    'h1, h2, h3, h4, h5, h6, p',
-                  );
-                  for (var element in potentialTitles) {
-                    if (element.text.trim().toLowerCase() == chapterTitle) {
-                      element.remove();
-                      break;
+                final chapterTitle = chapter.Title?.trim().toLowerCase() ?? '';
+                if (htmlContent.isNotEmpty && chapterTitle.isNotEmpty) {
+                  try {
+                    var document = dom.Document.html(htmlContent);
+                    final potentialTitles = document.querySelectorAll(
+                      'h1, h2, h3, h4, h5, h6, p',
+                    );
+                    for (var element in potentialTitles) {
+                      if (element.text.trim().toLowerCase() == chapterTitle) {
+                        element.remove();
+                        break;
+                      }
                     }
+                    htmlContent = document.body?.innerHtml ?? htmlContent;
+                  } catch (e) {
+                    // Ignore parsing errors for title removal
                   }
-                  htmlContent = document.body?.innerHtml ?? htmlContent;
-                } catch (e) {
-                  // Ignore parsing errors for title removal
                 }
-              }
-              final cleanedHtml = _cleanHtml(htmlContent);
+                final cleanedHtml = _cleanHtml(htmlContent);
 
-              final processedHtml = _embedImagesInHtml(
-                // htmlContent,
-                cleanedHtml,
-                chapter.ContentFileName,
-              );
+                final processedHtml = _embedImagesInHtml(
+                  // htmlContent,
+                  cleanedHtml,
+                  chapter.ContentFileName,
+                );
 
-              // return SingleChildScrollView(
-              return InteractiveViewer(
-                transformationController: _transformationController,
-                minScale: 1.0,
-                maxScale: 4.0,
-                child: SingleChildScrollView(
-                  // physics: _isZoomed
-                  //     ? const NeverScrollableScrollPhysics()
-                  //     : const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 60.0),
-                  child: HtmlWidget(
-                    processedHtml,
-                    textStyle: const TextStyle(
-                      fontSize: baseFontSize,
-                      height: 1.5,
-                      color: Color(0xFF5D4037),
-                    ),
-                    customStylesBuilder: (element) {
-                      if (element.localName == 'p' &&
-                          element.text.trim().isEmpty &&
-                          !element.innerHtml.contains('<img')) {
-                        return {'height': '0', 'margin': '0', 'padding': '0'};
-                      }
-                      final appliedStyles = <String, String>{};
+                // return SingleChildScrollView(
+                return InteractiveViewer(
+                  transformationController: _transformationController,
+                  minScale: 1.0,
+                  maxScale: 4.0,
+                  child: SingleChildScrollView(
+                    // physics: _isZoomed
+                    //     ? const NeverScrollableScrollPhysics()
+                    //     : const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 55.0),
+                    child: HtmlWidget(
+                      processedHtml,
+                      textStyle: const TextStyle(
+                        fontSize: baseFontSize,
+                        height: 1.5,
+                        color: Color(0xFF5D4037),
+                      ),
+                      customStylesBuilder: (element) {
+                        if (element.localName == 'p' &&
+                            element.text.trim().isEmpty &&
+                            !element.innerHtml.contains('<img')) {
+                          return {'height': '0', 'margin': '0', 'padding': '0'};
+                        }
+                        final appliedStyles = <String, String>{};
 
-                      // Apply styles based on specificity
-                      if (_cssRules.containsKey('*'))
-                        appliedStyles.addAll(_cssRules['*']!);
-                      if (_cssRules.containsKey(element.localName))
-                        appliedStyles.addAll(_cssRules[element.localName]!);
-                      for (final className in element.classes) {
-                        final classSelector = '.$className';
-                        if (_cssRules.containsKey(classSelector))
-                          appliedStyles.addAll(_cssRules[classSelector]!);
-                        final tagAndClassSelector =
-                            '${element.localName}$classSelector';
-                        if (_cssRules.containsKey(tagAndClassSelector))
-                          appliedStyles.addAll(_cssRules[tagAndClassSelector]!);
-                      }
-                      if (element.id.isNotEmpty) {
-                        final idSelector = '#${element.id}';
-                        if (_cssRules.containsKey(idSelector))
-                          appliedStyles.addAll(_cssRules[idSelector]!);
-                      }
+                        // Apply styles based on specificity
+                        if (_cssRules.containsKey('*'))
+                          appliedStyles.addAll(_cssRules['*']!);
+                        if (_cssRules.containsKey(element.localName))
+                          appliedStyles.addAll(_cssRules[element.localName]!);
+                        for (final className in element.classes) {
+                          final classSelector = '.$className';
+                          if (_cssRules.containsKey(classSelector))
+                            appliedStyles.addAll(_cssRules[classSelector]!);
+                          final tagAndClassSelector =
+                              '${element.localName}$classSelector';
+                          if (_cssRules.containsKey(tagAndClassSelector))
+                            appliedStyles.addAll(
+                              _cssRules[tagAndClassSelector]!,
+                            );
+                        }
+                        if (element.id.isNotEmpty) {
+                          final idSelector = '#${element.id}';
+                          if (_cssRules.containsKey(idSelector))
+                            appliedStyles.addAll(_cssRules[idSelector]!);
+                        }
 
-                      // Heuristics for centering
-                      if ([
-                            'h1',
-                            'h2',
-                            'h3',
-                            'h4',
-                            'h5',
-                            'h6',
-                          ].contains(element.localName) ||
-                          element.classes.any((c) => c.contains('center'))) {
-                        appliedStyles['text-align'] = 'center';
-                      }
-                      if (element.localName == 'p' &&
-                          element.text.trim().isEmpty &&
-                          element.innerHtml.contains('<img')) {
-                        appliedStyles['text-align'] = 'center';
-                        appliedStyles['margin'] = '0';
-                      }
-                      if (element.localName == 'div' &&
-                          element.children.length == 1 &&
-                          (element.children.first.localName == 'svg' ||
-                              element.children.first.localName == 'img')) {
-                        appliedStyles['text-align'] = 'center';
-                      }
+                        // Heuristics for centering
+                        if ([
+                              'h1',
+                              'h2',
+                              'h3',
+                              'h4',
+                              'h5',
+                              'h6',
+                            ].contains(element.localName) ||
+                            element.classes.any((c) => c.contains('center'))) {
+                          appliedStyles['text-align'] = 'center';
+                        }
+                        if (element.localName == 'span') {
+                          appliedStyles['text-align'] = 'center';
+                        }
+                        if (element.localName == 'p') {
+                          appliedStyles['text-align'] = 'center';
+                        }
+                        if (element.localName == 'p' &&
+                            element.text.trim().isEmpty &&
+                            element.innerHtml.contains('<img')) {
+                          appliedStyles['text-align'] = 'center';
+                          appliedStyles['margin'] = '0';
+                        }
+                        if (element.localName == 'div' &&
+                            element.children.length == 1 &&
+                            (element.children.first.localName == 'svg' ||
+                                element.children.first.localName == 'img')) {
+                          appliedStyles['text-align'] = 'center';
+                        }
 
-                      if (appliedStyles.isEmpty) return null;
+                        if (appliedStyles.isEmpty) return null;
 
-                      final finalStyles = <String, String>{};
-                      final isImage = [
-                        'img',
-                        'svg',
-                        'image',
-                      ].contains(element.localName);
+                        final finalStyles = <String, String>{};
+                        final isImage = [
+                          'img',
+                          'svg',
+                          'image',
+                        ].contains(element.localName);
 
-                      appliedStyles.forEach((key, value) {
-                        final cleanValue = value.replaceAll('+', '').trim();
-                        if (cleanValue.isEmpty) return;
-                        if (isImage) {
+                        appliedStyles.forEach((key, value) {
+                          final cleanValue = value.replaceAll('+', '').trim();
+                          if (cleanValue.isEmpty) return;
+                          if (isImage) {
+                            switch (key) {
+                              case 'width':
+                              case 'height':
+                              case 'max-width':
+                              case 'max-height':
+                              case 'margin':
+                              case 'padding':
+                              case 'border':
+                                finalStyles[key] = cleanValue;
+                                break;
+                            }
+                            return;
+                          }
+
                           switch (key) {
-                            case 'width':
-                            case 'height':
-                            case 'max-width':
-                            case 'max-height':
-                            case 'margin':
-                            case 'padding':
-                            case 'border':
+                            // case 'font-size':
+                            //   String finalSize;
+                            //   // If value already has a unit, pass it through. Otherwise, apply a heuristic.
+                            //   if (RegExp(r'(px|%|em|rem|pt|pc|in|cm|mm)$', caseSensitive: false).hasMatch(cleanValue)) {
+                            //     finalSize = cleanValue;
+                            //   } else {
+                            //     final numericValue = double.tryParse(cleanValue);
+                            //     if (numericValue != null) {
+                            //       // Heuristic: Small numbers (likely 'em'), large numbers (likely '%').
+                            //       if (numericValue < 10) {
+                            //         finalSize = '${numericValue}em';
+                            //       } else {
+                            //         finalSize = '${numericValue}%';
+                            //       }
+                            //     } else {
+                            //       finalSize = cleanValue;
+                            //     }
+                            //   }
+                            //   finalStyles[key] = finalSize;
+                            //   break;
+                            // case 'font-size':
+                            //   finalStyles[key] = normalizeCssFontSize(cleanValue);
+                            //   break;
+
+                            case 'font-size':
+                              finalStyles[key] = cleanValue;
+                              break;
+
+                            case 'line-height':
+                              String finalHeight;
+                              final numericValue = double.tryParse(cleanValue);
+                              if (numericValue != null) {
+                                if (numericValue > 10) {
+                                  finalHeight = (numericValue / 100).toString();
+                                } else {
+                                  finalHeight = numericValue.toString();
+                                }
+                              } else {
+                                finalHeight = cleanValue;
+                              }
+                              finalStyles[key] = finalHeight;
+                              break;
+
+                            // case 'margin':
+                            // case 'margin-top':
+                            // case 'margin-bottom':
+                            // case 'margin-left':
+                            // case 'margin-right':
+                            // case 'padding':
+                            // case 'padding-top':
+                            // case 'padding-bottom':
+                            // case 'padding-left':
+                            // case 'padding-right':
+                            // case 'text-indent':
+                            //   String finalValue;
+                            //   if (cleanValue.toLowerCase().endsWith('px') ||
+                            //       cleanValue.toLowerCase().endsWith('%')) {
+                            //     finalValue = cleanValue;
+                            //   } else {
+                            //     final numericValue = double.tryParse(
+                            //       cleanValue.replaceAll(
+                            //         RegExp(r'em', caseSensitive: false),
+                            //         '',
+                            //       ),
+                            //     );
+                            //     if (numericValue != null) {
+                            //       final newSize = numericValue * baseFontSize;
+                            //       finalValue = '${newSize}px';
+                            //     } else {
+                            //       finalValue = cleanValue;
+                            //     }
+                            //   }
+                            //   finalStyles[key] = finalValue;
+                            //   break;
+
+                            case 'color':
+                            case 'background-color':
+                              finalStyles[key] = _formatColorValue(cleanValue);
+                              break;
+
+                            default:
                               finalStyles[key] = cleanValue;
                               break;
                           }
-                          return;
-                        }
+                        });
 
-                        switch (key) {
-                          // case 'font-size':
-                          //   String finalSize;
-                          //   // If value already has a unit, pass it through. Otherwise, apply a heuristic.
-                          //   if (RegExp(r'(px|%|em|rem|pt|pc|in|cm|mm)$', caseSensitive: false).hasMatch(cleanValue)) {
-                          //     finalSize = cleanValue;
-                          //   } else {
-                          //     final numericValue = double.tryParse(cleanValue);
-                          //     if (numericValue != null) {
-                          //       // Heuristic: Small numbers (likely 'em'), large numbers (likely '%').
-                          //       if (numericValue < 10) {
-                          //         finalSize = '${numericValue}em';
-                          //       } else {
-                          //         finalSize = '${numericValue}%';
-                          //       }
-                          //     } else {
-                          //       finalSize = cleanValue;
-                          //     }
-                          //   }
-                          //   finalStyles[key] = finalSize;
-                          //   break;
-                          // case 'font-size':
-                          //   finalStyles[key] = normalizeCssFontSize(cleanValue);
-                          //   break;
-
-                          case 'line-height':
-                            String finalHeight;
-                            final numericValue = double.tryParse(cleanValue);
-                            if (numericValue != null) {
-                              if (numericValue > 10) {
-                                finalHeight = (numericValue / 100).toString();
-                              } else {
-                                finalHeight = numericValue.toString();
-                              }
-                            } else {
-                              finalHeight = cleanValue;
-                            }
-                            finalStyles[key] = finalHeight;
-                            break;
-
-                          // case 'margin':
-                          // case 'margin-top':
-                          // case 'margin-bottom':
-                          // case 'margin-left':
-                          // case 'margin-right':
-                          // case 'padding':
-                          // case 'padding-top':
-                          // case 'padding-bottom':
-                          // case 'padding-left':
-                          // case 'padding-right':
-                          // case 'text-indent':
-                          //   String finalValue;
-                          //   if (cleanValue.toLowerCase().endsWith('px') ||
-                          //       cleanValue.toLowerCase().endsWith('%')) {
-                          //     finalValue = cleanValue;
-                          //   } else {
-                          //     final numericValue = double.tryParse(
-                          //       cleanValue.replaceAll(
-                          //         RegExp(r'em', caseSensitive: false),
-                          //         '',
-                          //       ),
-                          //     );
-                          //     if (numericValue != null) {
-                          //       final newSize = numericValue * baseFontSize;
-                          //       finalValue = '${newSize}px';
-                          //     } else {
-                          //       finalValue = cleanValue;
-                          //     }
-                          //   }
-                          //   finalStyles[key] = finalValue;
-                          //   break;
-
-                          case 'color':
-                          case 'background-color':
-                            finalStyles[key] = _formatColorValue(cleanValue);
-                            break;
-
-                          default:
-                            finalStyles[key] = cleanValue;
-                            break;
-                        }
-                      });
-
-                      return finalStyles.isNotEmpty ? finalStyles : null;
-                    },
+                        return finalStyles.isNotEmpty ? finalStyles : null;
+                      },
+                    ),
                   ),
+                );
+              },
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                // height: 50,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8.0,
+                  horizontal: 16.0,
                 ),
-              );
-            },
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 50,
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              color: Theme.of(
-                context,
-              ).scaffoldBackgroundColor.withOpacity(0.95),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      _book!.Chapters![_currentChapter].Title ?? '',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14.0),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                color: Theme.of(
+                  context,
+                ).scaffoldBackgroundColor.withOpacity(0.95),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text(
+                        _book!.Chapters![_currentChapter].Title ?? '',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 14.0),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
-                    style: TextStyle(
-                      fontSize: 12.0,
-                      color: Colors.grey.shade600,
+                    const SizedBox(height: 2),
+                    Text(
+                      'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
+                      style: TextStyle(
+                        fontSize: 12.0,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
