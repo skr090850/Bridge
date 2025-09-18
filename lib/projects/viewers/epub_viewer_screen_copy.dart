@@ -27,6 +27,7 @@ class EpubViewerScreenCopy extends StatefulWidget {
 class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   bool _loading = true;
   EpubBook? _book;
+  bool _isFixedLayout = false;
   Map<String, Uint8List> _images = {};
   final Map<String, Map<String, String>> _cssRules = {};
 
@@ -67,6 +68,9 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
 
   /// Parses all CSS content from the EPUB book and stores the rules.
   void _parseCssFromBook() {
+    if (_isFixedLayout) {
+      return;
+    }
     if (_book?.Content?.Css == null || _book!.Content!.Css!.isEmpty) {
       return;
     }
@@ -143,14 +147,16 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       final manifestItems = book.Schema?.Package?.Manifest?.Items;
       final htmlFiles = book.Content?.Html;
 
-      if (spineItems != null && (book.Chapters == null || book.Chapters!.length < spineItems.length)) {
-        
+      if (spineItems != null &&
+          (book.Chapters == null ||
+              book.Chapters!.length < spineItems.length)) {
         debugPrint(
-            "TOC is incomplete. Rebuilding chapters from spine. Spine items: ${spineItems.length}, Parsed chapters: ${book.Chapters?.length ?? 0}");
+          "TOC is incomplete. Rebuilding chapters from spine. Spine items: ${spineItems.length}, Parsed chapters: ${book.Chapters?.length ?? 0}",
+        );
 
         if (manifestItems != null && htmlFiles != null) {
           final newChapters = <EpubChapter>[];
-          
+
           for (final spineItem in spineItems) {
             final manifestItem = manifestItems.firstWhere(
               (item) => item.Id == spineItem.IdRef,
@@ -165,7 +171,10 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                   ..Title = manifestItem.Href!
                       .split('/')
                       .last
-                      .replaceAll(RegExp(r'\.x?html$', caseSensitive: false), '')
+                      .replaceAll(
+                        RegExp(r'\.x?html$', caseSensitive: false),
+                        '',
+                      )
                   ..ContentFileName = manifestItem.Href
                   ..HtmlContent = htmlFile?.Content,
               );
@@ -177,6 +186,19 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
           }
         }
       }
+      // --- START: DETECT FIXED-LAYOUT EPUB ---
+      bool isFixedLayout = false;
+      if (book.Content?.Html != null) {
+        for (final htmlFile in book.Content!.Html!.values) {
+          if (htmlFile.Content != null &&
+              htmlFile.Content!.contains('<meta name="viewport"')) {
+            isFixedLayout = true;
+            debugPrint("Fixed-layout EPUB detected.");
+            break; // Found it, no need to check other files.
+          }
+        }
+      }
+      // --- END: DETECT FIXED-LAYOUT EPUB ---
 
       final images = <String, Uint8List>{};
       book.Content?.Images?.forEach((key, value) {
@@ -190,6 +212,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       setState(() {
         _book = book;
         _images = images;
+        _isFixedLayout = isFixedLayout;
         _parseCssFromBook();
       });
     } catch (e) {
@@ -423,7 +446,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                       if (_cssRules.containsKey(idSelector))
                         appliedStyles.addAll(_cssRules[idSelector]!);
                     }
-
+                    
                     // Heuristics for centering
                     if ([
                           'h1',
