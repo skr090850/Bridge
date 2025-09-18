@@ -28,6 +28,8 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   bool _loading = true;
   EpubBook? _book;
   bool _isFixedLayout = false;
+  double _fontSize = 14.0;
+
   Map<String, Uint8List> _images = {};
   final Map<String, Map<String, String>> _cssRules = {};
 
@@ -358,7 +360,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       );
     }
 
-    const double baseFontSize = 14.0;
+    // const double baseFontSize = 14.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -444,10 +446,10 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                     padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 55.0),
                     child: HtmlWidget(
                       processedHtml,
-                      textStyle: const TextStyle(
-                        fontSize: baseFontSize,
+                      textStyle: TextStyle(
+                        fontSize: _fontSize, // Naya variable istemaal karein
                         height: 1.5,
-                        color: Color(0xFF5D4037),
+                        color: const Color(0xFF5D4037),
                       ),
                       customStylesBuilder: (element) {
                         if (element.localName == 'p' &&
@@ -644,27 +646,41 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                 color: Theme.of(
                   context,
                 ).scaffoldBackgroundColor.withOpacity(0.95),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
+                child: Row(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        _book!.Chapters![_currentChapter].Title ?? '',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14.0),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                            ),
+                            child: Text(
+                              _book!.Chapters![_currentChapter].Title ?? '',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 14.0),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
+                            style: TextStyle(
+                              fontSize: 12.0,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
-                      style: TextStyle(
-                        fontSize: 12.0,
-                        color: Colors.grey.shade600,
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.settings),
+                      onPressed: () {
+                        _showSettingsBottomSheet(context);
+                      },
                     ),
                   ],
                 ),
@@ -673,6 +689,79 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showSettingsBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      // StatefulBuilder ka istemaal karein taaki sheet ke andar state update ho sake
+      builder: (BuildContext bc) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setStateSheet) {
+            return Container(
+              padding: const EdgeInsets.all(16.0),
+              child: Wrap(
+                // Wrap widget ka istemaal karein taaki content fit ho jaaye
+                children: <Widget>[
+                  // 1. FONT SIZE OPTION
+                  const ListTile(
+                    leading: Icon(Icons.format_size),
+                    title: Text('Font Size'),
+                  ),
+                  Slider(
+                    value: _fontSize,
+                    min: 10.0,
+                    max: 30.0,
+                    divisions: 10,
+                    label: _fontSize.round().toString(),
+                    onChanged: (double value) {
+                      // Sheet ka state update karein
+                      setStateSheet(() {
+                        _fontSize = value;
+                      });
+                      // Main screen ka state update karein
+                      setState(() {});
+                    },
+                  ),
+                  const Divider(),
+
+                  // 2. SEARCH OPTION
+                  ListTile(
+                    leading: const Icon(Icons.search),
+                    title: const Text('Search in Book'),
+                    onTap: () {
+                      Navigator.pop(context); // Sheet ko band karein
+                      // Yahan search screen par navigate karne ka code likhein
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Search functionality coming soon!'),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(),
+
+                  // 3. ROTATE OPTION
+                  ListTile(
+                    leading: const Icon(Icons.screen_rotation),
+                    title: const Text('Rotate Screen'),
+                    onTap: () {
+                      Navigator.pop(context); // Sheet ko band karein
+                      // Yahan screen rotate karne ka code likhein
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Rotation functionality coming soon!'),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
