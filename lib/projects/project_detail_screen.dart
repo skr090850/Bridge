@@ -7,10 +7,12 @@ import 'package:open_filex/open_filex.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dotted_border/dotted_border.dart';
+import 'package:intl/intl.dart'; 
 
 import 'model/project_model.dart';
 import 'model/folder_model.dart';
 import 'model/file_model.dart';
+import 'model/project_member_model.dart';
 
 import 'viewers/doc_viewer_screen.dart';
 import 'viewers/pdf_viewer_screen.dart';
@@ -92,6 +94,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       return filtered.map((json) => FileModel.fromJson(json)).toList();
     } else {
       throw Exception('Failed to load files');
+    }
+  }
+  Future<List<ProjectMember>> _fetchProjectMembers(int projectId) async {
+    final response = await http.get(Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/template/getmemberAssainersList?id=$projectId'));
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      return data.map((json) => ProjectMember.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load project members');
     }
   }
 
@@ -416,7 +428,220 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  
+  void _showSendEmailDialog() {
+    final textTheme = Theme.of(context).textTheme;
+    final Future<List<ProjectMember>> membersFuture = _fetchProjectMembers(widget.projectId);
+    final mailContentController = TextEditingController();
+    List<ProjectMember> membersList = [];
+    bool selectAll = false;
+    bool isSending = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            
+            Future<void> sendEmail() async {
+              final selectedIds = membersList.where((m) => m.isSelected).map((m) => m.id.toString()).toList();
+              
+              if (selectedIds.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one member.'), backgroundColor: Colors.orange));
+                return;
+              }
+              if (mailContentController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mail content cannot be empty.'), backgroundColor: Colors.orange));
+                return;
+              }
+
+              setDialogState(() => isSending = true);
+
+              try {
+                final now = DateTime.now();
+                final formattedDate = DateFormat('dd/MM/yyyy').format(now);
+
+                final body = {
+                  "MailFromId": 1000,
+                  "fid": _selectedFolder?.id ?? 0,
+                  "projectid": widget.projectId,
+                  "MailSub": _selectedFolder?.name ?? widget.projectTitle,
+                  "MailToids": selectedIds.join(','),
+                  "MailMessage": mailContentController.text.trim(),
+                  "MailPerson": null,
+                  "createddate": formattedDate,
+                  "processdate": formattedDate,
+                  "Type": "Folders",
+                  "MailEventId": 0,
+                  "processid": null,
+                  "status": 0
+                };
+
+                final response = await http.post(
+                  Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/template/AddMailalerts'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: json.encode(body),
+                );
+
+                // debugPrint('--- SEND EMAIL RESPONSE ---');
+                // debugPrint('Status Code: ${response.statusCode}');
+                // debugPrint('Response Body: ${response.body}');
+                // debugPrint('--------------------------');
+
+                if (response.statusCode == 200) {
+                  final responseBody = json.decode(response.body);
+                  if (responseBody == true) {
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email sent successfully!'), backgroundColor: Colors.green));
+                    }
+                  } else {
+                    throw Exception('Server returned false.');
+                  }
+                } else {
+                  throw Exception('Server error: ${response.statusCode}');
+                }
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send email: $e'), backgroundColor: Colors.red));
+              } finally {
+                if (mounted) setDialogState(() => isSending = false);
+              }
+            }
+            
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 16, 0),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Send Email', style: TextStyle(fontWeight: FontWeight.bold)),
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DottedBorder(
+                        borderType: BorderType.RRect,
+                        radius: const Radius.circular(8),
+                        color: Colors.grey[400]!,
+                        strokeWidth: 1.5,
+                        dashPattern: const [6, 5],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                          width: double.infinity,
+                          child: Text(
+                            _selectedFolder?.name ?? widget.projectTitle,
+                            style: TextStyle(color: Colors.grey[700])
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FutureBuilder<List<ProjectMember>>(
+                        future: membersFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: CircularProgressIndicator(),
+                            ));
+                          }
+                          if (snapshot.hasError) {
+                            return Center(child: Text('Error: ${snapshot.error}'));
+                          }
+                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                            return const Center(child: Text('No members found.'));
+                          }
+                          
+                          membersList = snapshot.data!;
+
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CheckboxListTile(
+                                title: Text('Select All Members',style: Theme.of(context).textTheme.labelLarge,),
+                                value: selectAll,
+                                onChanged: (bool? value) {
+                                  setDialogState(() {
+                                    selectAll = value!;
+                                    for (var member in membersList) {
+                                      member.isSelected = selectAll;
+                                    }
+                                  });
+                                },
+                                visualDensity: const VisualDensity(vertical: -4),
+                                controlAffinity: ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              const Divider(),
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: membersList.length,
+                                itemBuilder: (context, index) {
+                                  final member = membersList[index];
+                                  return CheckboxListTile(
+                                    title: Text(member.name,style: Theme.of(context).textTheme.labelLarge,),
+                                    value: member.isSelected,
+                                    onChanged: (bool? value) {
+                                      setDialogState(() {
+                                        member.isSelected = value!;
+                                      });
+                                    },
+                                    visualDensity: const VisualDensity(vertical: -4),
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    contentPadding: EdgeInsets.zero,
+                                  );
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: mailContentController,
+                        style: textTheme.labelLarge,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          hintText: 'Mail content',hintStyle: Theme.of( context).textTheme.labelLarge?.copyWith(color: Colors.grey[600]),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                      onPressed: isSending ? null : sendEmail,
+                      child: isSending
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                          : const Text('Send', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   Widget _getIconForFile(String filename) {
     final extension = filename.split('.').last.toLowerCase();
@@ -467,7 +692,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.projectTitle)),
+      appBar: AppBar(title: Text(widget.projectTitle),
+      actions: [
+          IconButton(
+            icon: const Icon(Icons.email_outlined),
+            onPressed: _showSendEmailDialog,
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
