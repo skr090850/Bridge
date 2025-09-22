@@ -959,7 +959,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 crossAxisCount: 3,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio: 1,
+                childAspectRatio: 1.6,  //before 1
               ),
               itemCount: folders.length,
               itemBuilder: (context, index) {
@@ -984,7 +984,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         folder.name,
                         style: Theme.of(context).textTheme.labelMedium,
                         textAlign: TextAlign.center,
-                        maxLines: 2,
+                        maxLines: 1, //before 2
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
