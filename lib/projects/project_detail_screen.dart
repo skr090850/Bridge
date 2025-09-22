@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:flutter_html/flutter_html.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:dotted_border/dotted_border.dart';
 
 import 'model/project_model.dart';
 import 'model/folder_model.dart';
@@ -153,7 +155,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     else if (extension == 'epub')
       // viewer = EpubViewerScreen(filePath: filePath, fileName: fileName);
       viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName);
-      // viewer = EpubViewer(filePath: filePath, fileName: fileName);
+    // viewer = EpubViewer(filePath: filePath, fileName: fileName);
     else if (extension == 'txt')
       viewer = TextViewerScreen(filePath: filePath, fileName: fileName);
     else if (imageExtensions.contains(extension))
@@ -173,6 +175,248 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       });
     }
   }
+
+  void _showUploadDialog() {
+    List<File> selectedFiles = [];
+    bool isUploading = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> pickFiles() async {
+              FilePickerResult? result = await FilePicker.platform.pickFiles(
+                allowMultiple: true,
+              );
+              if (result != null) {
+                setDialogState(() {
+                  selectedFiles = result.paths
+                      .map((path) => File(path!))
+                      .toList();
+                });
+              }
+            }
+
+            Future<void> uploadFiles() async {
+              setDialogState(() {
+                isUploading = true;
+              });
+
+              var uri = Uri.parse(
+                'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/PostUserImage',
+              );
+              var request = http.MultipartRequest('POST', uri);
+
+              final projid = widget.projectId.toString();
+              final fid = _selectedFolder!.id.toString();
+              final uid = '1000';
+
+              // debugPrint('--- UPLOADING FILE ---');
+              // debugPrint('API URL: $uri');
+              // debugPrint('Project ID: $projid');
+              // debugPrint('Folder ID: $fid');
+              // debugPrint('User ID: $uid');
+
+              request.fields['projid'] = projid;
+              request.fields['fid'] = fid;
+              request.fields['uid'] = uid;
+
+              for (int i = 0; i < selectedFiles.length; i++) {
+                // debugPrint('Adding file: ${selectedFiles[i].path.split('/').last}');
+                request.files.add(
+                  await http.MultipartFile.fromPath(
+                    'file_${i + 1}',
+                    selectedFiles[i].path,
+                  ),
+                );
+              }
+
+              try {
+                var response = await request.send();
+                final responseBody = await response.stream.bytesToString();
+
+                debugPrint('Response Status Code: ${response.statusCode}');
+                debugPrint('Response Body: $responseBody');
+                debugPrint('--- UPLOAD COMPLETE ---');
+
+                if (response.statusCode == 200) {
+                  final body = responseBody.trim();
+                  if (body == '1' || body.isEmpty) {
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Files uploaded successfully!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      setState(() {
+                        _filesFuture = _fetchFiles(
+                          widget.projectId,
+                          _selectedFolder!.id,
+                        );
+                      });
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('An unknown error occurred'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Upload failed. Server error: ${response.statusCode}',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                // debugPrint('Upload Exception: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('An error occurred: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } finally {
+                setDialogState(() {
+                  isUploading = false;
+                });
+              }
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 16, 0),
+              contentPadding: const EdgeInsets.all(24),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Upload File',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth:
+                      MediaQuery.of(context).size.width * 0.8,
+                  minWidth:
+                      300,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: pickFiles,
+                      child: DottedBorder(
+                        borderType: BorderType.RRect,
+                        radius: const Radius.circular(8),
+                        color: Colors.grey[400]!,
+                        strokeWidth: 1.5,
+                        dashPattern: const [6, 5],
+                        child: Container(
+                          height: 80,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: selectedFiles.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'Please select files here',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                )
+                              : SingleChildScrollView(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 8.0,
+                                    ),
+                                    child: Column(
+                                      children: selectedFiles
+                                          .map(
+                                            (file) => ListTile(
+                                              dense: true,
+                                              leading: const Icon(
+                                                Icons.insert_drive_file,
+                                                size: 20,
+                                              ),
+                                              title: Text(
+                                                file.path.split('/').last,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: selectedFiles.isEmpty || isUploading
+                            ? null
+                            : uploadFiles,
+                        child: isUploading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 3,
+                                ),
+                              )
+                            : const Text(
+                                'Upload',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  
 
   Widget _getIconForFile(String filename) {
     final extension = filename.split('.').last.toLowerCase();
@@ -235,10 +479,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   : _buildFileListView(),
             ),
           ),
-          Expanded(
-            flex: 1,
-            child: _buildFolderGridView(),
-          ),
+          Expanded(flex: 1, child: _buildFolderGridView()),
         ],
       ),
     );
@@ -269,14 +510,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               children: [
                 Text(
                   project.title,
-                  style:textTheme.titleLarge?.copyWith(
+                  style: textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
+
                   // style: const TextStyle(
                   //     fontSize: 24, fontWeight: FontWeight.bold),
-
                 ),
-                
+
                 const SizedBox(height: 8),
                 Html(data: project.projectDesc),
                 const Divider(height: 32, thickness: 1),
@@ -287,13 +528,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 const SizedBox(height: 8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text(project.coordinatorName,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(
+                    project.coordinatorName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(
-                      "${project.coordinatorPosition}\n${project.coordinatorOrganization}"),
+                    "${project.coordinatorPosition}\n${project.coordinatorOrganization}",
+                  ),
                   // trailing: Icon(Icons.person,
                   //     color: Theme.of(context).colorScheme.primary),
-                )
+                ),
               ],
             ),
           ),
@@ -324,6 +568,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   //   fontWeight: FontWeight.bold,
                   // ),
                 ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.upload_file),
+                onPressed:
+                    _showUploadDialog, // Isko dabane par upload dialog khulega
               ),
               IconButton(
                 icon: const Icon(Icons.close),
@@ -422,24 +671,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               ),
                             ),
                             Expanded(
-                            flex: 3,
-                            child: isCurrentlyDownloading
-                                ? const Align(
-                                    alignment: Alignment.centerRight,
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
+                              flex: 3,
+                              child: isCurrentlyDownloading
+                                  ? const Align(
+                                      alignment: Alignment.centerRight,
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                        ),
                                       ),
+                                    )
+                                  : Text(
+                                      file.dateModified,
+                                      style: textTheme.bodySmall,
+                                      textAlign: TextAlign.right,
                                     ),
-                                  )
-                                : Text(
-                                    file.dateModified,
-                                    style: textTheme.bodySmall,
-                                    textAlign: TextAlign.right,
-                                  ),
-                          ),
+                            ),
                           ],
                         ),
                       ),

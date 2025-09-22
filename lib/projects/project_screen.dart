@@ -70,7 +70,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
             'Failed to load projects. Status code: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('An error occurred while fetching projects: $e');
+      // debugPrint('An error occurred while fetching projects: $e');
       throw Exception('An error occurred while fetching data.');
     }
   }
@@ -119,10 +119,16 @@ class _ProjectScreenState extends State<ProjectScreen> {
                       return Column(
                         children: [
                           ListTile(
-                            leading: Icon(
-                              Icons.settings_input_component_outlined,
-                              color: primaryColor,
-                              size: 30,
+                            leading: Image.asset(
+                              'assets/images/setting.jpg', // Icon ko Image.asset se badla gaya
+                              width: 30,
+                              height: 30,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                    Icons.settings_input_component_outlined,
+                                    color: primaryColor,
+                                    size: 30);
+                              },
                             ),
                             title: Text(project.title,
                             style: TextTheme.labelLarge,
