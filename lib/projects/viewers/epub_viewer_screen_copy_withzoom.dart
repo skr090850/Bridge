@@ -11,6 +11,48 @@ import 'package:html/dom.dart' as dom;
 import 'package:flutter/foundation.dart';
 import 'package:bridge/projects/viewers/search_screen.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class DrawingPath {
+  final List<Offset?> points;
+  final Color color;
+  final double strokeWidth;
+
+  DrawingPath({
+    required this.points,
+    required this.color,
+    required this.strokeWidth,
+  });
+}
+
+class DrawingPainter extends CustomPainter {
+  final List<DrawingPath> paths;
+
+  DrawingPainter({required this.paths});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var pathData in paths) {
+      final paint = Paint()
+        ..color = pathData.color
+        ..strokeWidth = pathData.strokeWidth
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      for (int i = 0; i < pathData.points.length - 1; i++) {
+        if (pathData.points[i] != null && pathData.points[i + 1] != null) {
+          canvas.drawLine(pathData.points[i]!, pathData.points[i + 1]!, paint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return true;
+  }
+}
 
 class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
@@ -39,6 +81,14 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   final PageController _pageController = PageController();
   late TransformationController _transformationController;
   bool _isZoomed = false;
+
+  bool _isDrawingMode = false;
+  bool _isErasing = false;
+  final Map<int, List<DrawingPath>> _drawings = {};
+  DrawingPath? _currentPath;
+  Color _drawingColor = Colors.red;
+  final double _strokeWidth = 3.0;
+  final double _eraserSize = 20.0;
 
   /// Cleans the HTML content by removing unwanted tags and whitespace.
   String _cleanHtml(String html) {
@@ -158,6 +208,37 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   // }
   /// Loads the EPUB book from the file path provided, with a definitive fallback logic
   /// that compares chapter count with the book's spine.
+
+  Future<void> _saveCurrentPage(int pageIndex) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('last_page_${widget.filePath}', pageIndex);
+    } catch (e) {
+      debugPrint("Failed to save page progress: $e");
+    }
+  }
+
+  Future<void> _loadLastPage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPage = prefs.getInt('last_page_${widget.filePath}');
+      if (savedPage != null &&
+          _book != null &&
+          savedPage < _book!.Chapters!.length) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_pageController.hasClients) {
+            _pageController.jumpToPage(savedPage);
+            setState(() {
+              _currentChapter = savedPage;
+            });
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Failed to load saved page progress: $e");
+    }
+  }
+
   Future<void> _loadBook() async {
     try {
       final file = File(widget.filePath);
@@ -236,6 +317,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
         _isFixedLayout = isFixedLayout;
         _parseCssFromBook();
       });
+      await _loadLastPage();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -345,6 +427,64 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
     return cssColor;
   }
 
+  void _handlePanStart(DragStartDetails details) {
+    if (!_isDrawingMode) return;
+
+    // final box = context.findRenderObject() as RenderBox;
+    // final point = box.globalToLocal(details.globalPosition);
+    final point = details.localPosition;
+
+    setState(() {
+      if (_isErasing) {
+        // Erase existing paths
+        _drawings[_currentChapter]?.removeWhere((path) {
+          return path.points.any(
+            (p) => p != null && (p - point).distance < _eraserSize,
+          );
+        });
+      } else {
+        // Start a new path
+        _currentPath = DrawingPath(
+          points: [point],
+          color: _drawingColor,
+          strokeWidth: _strokeWidth,
+        );
+        if (_drawings[_currentChapter] == null) {
+          _drawings[_currentChapter] = [];
+        }
+        _drawings[_currentChapter]!.add(_currentPath!);
+      }
+    });
+  }
+
+  void _handlePanUpdate(DragUpdateDetails details) {
+    if (!_isDrawingMode) return;
+
+    // final box = context.findRenderObject() as RenderBox;
+    // final point = box.globalToLocal(details.globalPosition);
+    final point = details.localPosition;
+
+    setState(() {
+      if (_isErasing) {
+        _drawings[_currentChapter]?.removeWhere((path) {
+          return path.points.any(
+            (p) => p != null && (p - point).distance < _eraserSize,
+          );
+        });
+      } else if (_currentPath != null) {
+        _currentPath!.points.add(point);
+      }
+    });
+  }
+
+  void _handlePanEnd(DragEndDetails details) {
+    if (!_isDrawingMode) return;
+    setState(() {
+      _currentPath?.points.add(null);
+      _currentPath = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -369,6 +509,42 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
       appBar: AppBar(
         title: Text(_book?.Title ?? widget.fileName),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.edit,
+              color: _isDrawingMode && !_isErasing ? Colors.blue : null,
+            ),
+            tooltip: 'Draw',
+            onPressed: () {
+              setState(() {
+                if (_isDrawingMode && !_isErasing) {
+                  _isDrawingMode = false;
+                  _drawings[_currentChapter]?.clear();
+                } else {
+                  _isDrawingMode = true;
+                  _isErasing = false;
+                }
+              });
+            },
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.cleaning_services,
+              color: _isDrawingMode && _isErasing ? Colors.blue : null,
+            ),
+            tooltip: 'Eraser',
+            onPressed: () {
+              setState(() {
+                if (_isDrawingMode && _isErasing) {
+                  _isDrawingMode = false;
+                  _isErasing = false;
+                } else {
+                  _isDrawingMode = true;
+                  _isErasing = true;
+                }
+              });
+            },
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.list_alt),
@@ -399,13 +575,21 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
           children: [
             PageView.builder(
               controller: _pageController,
+              physics: _isDrawingMode
+                  ? const NeverScrollableScrollPhysics()
+                  : const PageScrollPhysics(),
               // physics: _isZoomed
               //     ? const NeverScrollableScrollPhysics()
               //     : const PageScrollPhysics(),
               itemCount: _book!.Chapters!.length,
               onPageChanged: (index) {
-                setState(() => _currentChapter = index);
+                setState(() {
+                  _currentChapter = index;
+                  _isDrawingMode = false; // Exit drawing mode on page change
+                  _isErasing = false;
+                });
                 _transformationController.value = Matrix4.identity();
+                _saveCurrentPage(index); // Save progress
               },
               itemBuilder: (context, index) {
                 final chapter = _book!.Chapters![index];
@@ -438,256 +622,300 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
                 );
 
                 // return SingleChildScrollView(
-                return InteractiveViewer(
-                  transformationController: _transformationController,
-                  minScale: 1.0,
-                  maxScale: 4.0,
-                  child: SingleChildScrollView(
-                    // physics: _isZoomed
-                    //     ? const NeverScrollableScrollPhysics()
-                    //     : const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 55.0),
-                    child: HtmlWidget(
-                      processedHtml,
-                      textStyle: TextStyle(
-                        fontSize: _fontSize, // Naya variable istemaal karein
-                        height: 1.5,
-                        color: const Color(0xFF5D4037),
-                      ),
-                      customStylesBuilder: (element) {
-                        if (element.localName == 'p' &&
-                            element.text.trim().isEmpty &&
-                            !element.innerHtml.contains('<img')) {
-                          return {'height': '0', 'margin': '0', 'padding': '0'};
-                        }
-                        final appliedStyles = <String, String>{};
-
-                        // Apply styles based on specificity
-                        if (_cssRules.containsKey('*'))
-                          appliedStyles.addAll(_cssRules['*']!);
-                        if (_cssRules.containsKey(element.localName))
-                          appliedStyles.addAll(_cssRules[element.localName]!);
-                        for (final className in element.classes) {
-                          final classSelector = '.$className';
-                          if (_cssRules.containsKey(classSelector))
-                            appliedStyles.addAll(_cssRules[classSelector]!);
-                          final tagAndClassSelector =
-                              '${element.localName}$classSelector';
-                          if (_cssRules.containsKey(tagAndClassSelector))
-                            appliedStyles.addAll(
-                              _cssRules[tagAndClassSelector]!,
-                            );
-                        }
-                        if (element.id.isNotEmpty) {
-                          final idSelector = '#${element.id}';
-                          if (_cssRules.containsKey(idSelector))
-                            appliedStyles.addAll(_cssRules[idSelector]!);
-                        }
-
-                        // Heuristics for centering
-                        if ([
-                              'h1',
-                              'h2',
-                              'h3',
-                              'h4',
-                              'h5',
-                              'h6',
-                            ].contains(element.localName) ||
-                            element.classes.any((c) => c.contains('center'))) {
-                          appliedStyles['text-align'] = 'center';
-                        }
-                        if (element.localName == 'span') {
-                          appliedStyles['text-align'] = 'center';
-                        }
-                        if (element.localName == 'p') {
-                          appliedStyles['text-align'] = 'center';
-                        }
-                        if (element.localName == 'p' &&
-                            element.text.trim().isEmpty &&
-                            element.innerHtml.contains('<img')) {
-                          appliedStyles['text-align'] = 'center';
-                          appliedStyles['margin'] = '0';
-                        }
-                        if (element.localName == 'div' &&
-                            element.children.length == 1 &&
-                            (element.children.first.localName == 'svg' ||
-                                element.children.first.localName == 'img')) {
-                          appliedStyles['text-align'] = 'center';
-                        }
-
-                        if (appliedStyles.isEmpty) return null;
-
-                        final finalStyles = <String, String>{};
-                        final isImage = [
-                          'img',
-                          'svg',
-                          'image',
-                        ].contains(element.localName);
-
-                        appliedStyles.forEach((key, value) {
-                          final cleanValue = value.replaceAll('+', '').trim();
-                          if (cleanValue.isEmpty) return;
-                          if (isImage) {
-                            switch (key) {
-                              case 'width':
-                              case 'height':
-                              case 'max-width':
-                              case 'max-height':
-                              case 'margin':
-                              case 'padding':
-                              case 'border':
-                                finalStyles[key] = cleanValue;
-                                break;
-                            }
-                            return;
-                          }
-
-                          switch (key) {
-                            // case 'font-size':
-                            //   String finalSize;
-                            //   // If value already has a unit, pass it through. Otherwise, apply a heuristic.
-                            //   if (RegExp(r'(px|%|em|rem|pt|pc|in|cm|mm)$', caseSensitive: false).hasMatch(cleanValue)) {
-                            //     finalSize = cleanValue;
-                            //   } else {
-                            //     final numericValue = double.tryParse(cleanValue);
-                            //     if (numericValue != null) {
-                            //       // Heuristic: Small numbers (likely 'em'), large numbers (likely '%').
-                            //       if (numericValue < 10) {
-                            //         finalSize = '${numericValue}em';
-                            //       } else {
-                            //         finalSize = '${numericValue}%';
-                            //       }
-                            //     } else {
-                            //       finalSize = cleanValue;
-                            //     }
-                            //   }
-                            //   finalStyles[key] = finalSize;
-                            //   break;
-                            // case 'font-size':
-                            //   finalStyles[key] = normalizeCssFontSize(cleanValue);
-                            //   break;
-
-                            case 'font-size':
-                              finalStyles[key] = cleanValue;
-                              break;
-
-                            case 'line-height':
-                              String finalHeight;
-                              final numericValue = double.tryParse(cleanValue);
-                              if (numericValue != null) {
-                                if (numericValue > 10) {
-                                  finalHeight = (numericValue / 100).toString();
-                                } else {
-                                  finalHeight = numericValue.toString();
-                                }
-                              } else {
-                                finalHeight = cleanValue;
-                              }
-                              finalStyles[key] = finalHeight;
-                              break;
-
-                            // case 'margin':
-                            // case 'margin-top':
-                            // case 'margin-bottom':
-                            // case 'margin-left':
-                            // case 'margin-right':
-                            // case 'padding':
-                            // case 'padding-top':
-                            // case 'padding-bottom':
-                            // case 'padding-left':
-                            // case 'padding-right':
-                            // case 'text-indent':
-                            //   String finalValue;
-                            //   if (cleanValue.toLowerCase().endsWith('px') ||
-                            //       cleanValue.toLowerCase().endsWith('%')) {
-                            //     finalValue = cleanValue;
-                            //   } else {
-                            //     final numericValue = double.tryParse(
-                            //       cleanValue.replaceAll(
-                            //         RegExp(r'em', caseSensitive: false),
-                            //         '',
-                            //       ),
-                            //     );
-                            //     if (numericValue != null) {
-                            //       final newSize = numericValue * baseFontSize;
-                            //       finalValue = '${newSize}px';
-                            //     } else {
-                            //       finalValue = cleanValue;
-                            //     }
-                            //   }
-                            //   finalStyles[key] = finalValue;
-                            //   break;
-
-                            case 'color':
-                            case 'background-color':
-                              finalStyles[key] = _formatColorValue(cleanValue);
-                              break;
-
-                            default:
-                              finalStyles[key] = cleanValue;
-                              break;
-                          }
-                        });
-
-                        return finalStyles.isNotEmpty ? finalStyles : null;
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                // height: 50,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 8.0,
-                  horizontal: 16.0,
-                ),
-                color: Theme.of(
-                  context,
-                ).scaffoldBackgroundColor.withOpacity(0.95),
-                child: Row(
+                return Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16.0,
-                            ),
-                            child: Text(
-                              _book!.Chapters![_currentChapter].Title ?? '',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 14.0),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                    InteractiveViewer(
+                      transformationController: _transformationController,
+                      minScale: 1.0,
+                      maxScale: 4.0,
+                      child: SingleChildScrollView(
+                        // physics: _isZoomed
+                        //     ? const NeverScrollableScrollPhysics()
+                        //     : const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(
+                          16.0,
+                          16.0,
+                          16.0,
+                          55.0,
+                        ),
+                        child: HtmlWidget(
+                          processedHtml,
+                          textStyle: TextStyle(
+                            fontSize:
+                                _fontSize, // Naya variable istemaal karein
+                            height: 1.5,
+                            color: const Color(0xFF5D4037),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
-                            style: TextStyle(
-                              fontSize: 12.0,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
+                          customStylesBuilder: (element) {
+                            if (element.localName == 'p' &&
+                                element.text.trim().isEmpty &&
+                                !element.innerHtml.contains('<img')) {
+                              return {
+                                'height': '0',
+                                'margin': '0',
+                                'padding': '0',
+                              };
+                            }
+                            final appliedStyles = <String, String>{};
+
+                            // Apply styles based on specificity
+                            if (_cssRules.containsKey('*'))
+                              appliedStyles.addAll(_cssRules['*']!);
+                            if (_cssRules.containsKey(element.localName))
+                              appliedStyles.addAll(
+                                _cssRules[element.localName]!,
+                              );
+                            for (final className in element.classes) {
+                              final classSelector = '.$className';
+                              if (_cssRules.containsKey(classSelector))
+                                appliedStyles.addAll(_cssRules[classSelector]!);
+                              final tagAndClassSelector =
+                                  '${element.localName}$classSelector';
+                              if (_cssRules.containsKey(tagAndClassSelector))
+                                appliedStyles.addAll(
+                                  _cssRules[tagAndClassSelector]!,
+                                );
+                            }
+                            if (element.id.isNotEmpty) {
+                              final idSelector = '#${element.id}';
+                              if (_cssRules.containsKey(idSelector))
+                                appliedStyles.addAll(_cssRules[idSelector]!);
+                            }
+
+                            // Heuristics for centering
+                            if ([
+                                  'h1',
+                                  'h2',
+                                  'h3',
+                                  'h4',
+                                  'h5',
+                                  'h6',
+                                ].contains(element.localName) ||
+                                element.classes.any(
+                                  (c) => c.contains('center'),
+                                )) {
+                              appliedStyles['text-align'] = 'center';
+                            }
+                            if (element.localName == 'span') {
+                              appliedStyles['text-align'] = 'center';
+                            }
+                            if (element.localName == 'p') {
+                              appliedStyles['text-align'] = 'center';
+                            }
+                            if (element.localName == 'p' &&
+                                element.text.trim().isEmpty &&
+                                element.innerHtml.contains('<img')) {
+                              appliedStyles['text-align'] = 'center';
+                              appliedStyles['margin'] = '0';
+                            }
+                            if (element.localName == 'div' &&
+                                element.children.length == 1 &&
+                                (element.children.first.localName == 'svg' ||
+                                    element.children.first.localName ==
+                                        'img')) {
+                              appliedStyles['text-align'] = 'center';
+                            }
+
+                            if (appliedStyles.isEmpty) return null;
+
+                            final finalStyles = <String, String>{};
+                            final isImage = [
+                              'img',
+                              'svg',
+                              'image',
+                            ].contains(element.localName);
+
+                            appliedStyles.forEach((key, value) {
+                              final cleanValue = value
+                                  .replaceAll('+', '')
+                                  .trim();
+                              if (cleanValue.isEmpty) return;
+                              if (isImage) {
+                                switch (key) {
+                                  case 'width':
+                                  case 'height':
+                                  case 'max-width':
+                                  case 'max-height':
+                                  case 'margin':
+                                  case 'padding':
+                                  case 'border':
+                                    finalStyles[key] = cleanValue;
+                                    break;
+                                }
+                                return;
+                              }
+
+                              switch (key) {
+                                // case 'font-size':
+                                //   String finalSize;
+                                //   // If value already has a unit, pass it through. Otherwise, apply a heuristic.
+                                //   if (RegExp(r'(px|%|em|rem|pt|pc|in|cm|mm)$', caseSensitive: false).hasMatch(cleanValue)) {
+                                //     finalSize = cleanValue;
+                                //   } else {
+                                //     final numericValue = double.tryParse(cleanValue);
+                                //     if (numericValue != null) {
+                                //       // Heuristic: Small numbers (likely 'em'), large numbers (likely '%').
+                                //       if (numericValue < 10) {
+                                //         finalSize = '${numericValue}em';
+                                //       } else {
+                                //         finalSize = '${numericValue}%';
+                                //       }
+                                //     } else {
+                                //       finalSize = cleanValue;
+                                //     }
+                                //   }
+                                //   finalStyles[key] = finalSize;
+                                //   break;
+                                // case 'font-size':
+                                //   finalStyles[key] = normalizeCssFontSize(cleanValue);
+                                //   break;
+
+                                case 'font-size':
+                                  finalStyles[key] = cleanValue;
+                                  break;
+
+                                case 'line-height':
+                                  String finalHeight;
+                                  final numericValue = double.tryParse(
+                                    cleanValue,
+                                  );
+                                  if (numericValue != null) {
+                                    if (numericValue > 10) {
+                                      finalHeight = (numericValue / 100)
+                                          .toString();
+                                    } else {
+                                      finalHeight = numericValue.toString();
+                                    }
+                                  } else {
+                                    finalHeight = cleanValue;
+                                  }
+                                  finalStyles[key] = finalHeight;
+                                  break;
+
+                                // case 'margin':
+                                // case 'margin-top':
+                                // case 'margin-bottom':
+                                // case 'margin-left':
+                                // case 'margin-right':
+                                // case 'padding':
+                                // case 'padding-top':
+                                // case 'padding-bottom':
+                                // case 'padding-left':
+                                // case 'padding-right':
+                                // case 'text-indent':
+                                //   String finalValue;
+                                //   if (cleanValue.toLowerCase().endsWith('px') ||
+                                //       cleanValue.toLowerCase().endsWith('%')) {
+                                //     finalValue = cleanValue;
+                                //   } else {
+                                //     final numericValue = double.tryParse(
+                                //       cleanValue.replaceAll(
+                                //         RegExp(r'em', caseSensitive: false),
+                                //         '',
+                                //       ),
+                                //     );
+                                //     if (numericValue != null) {
+                                //       final newSize = numericValue * baseFontSize;
+                                //       finalValue = '${newSize}px';
+                                //     } else {
+                                //       finalValue = cleanValue;
+                                //     }
+                                //   }
+                                //   finalStyles[key] = finalValue;
+                                //   break;
+
+                                case 'color':
+                                case 'background-color':
+                                  finalStyles[key] = _formatColorValue(
+                                    cleanValue,
+                                  );
+                                  break;
+
+                                default:
+                                  finalStyles[key] = cleanValue;
+                                  break;
+                              }
+                            });
+
+                            return finalStyles.isNotEmpty ? finalStyles : null;
+                          },
+                        ),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.settings),
-                      onPressed: () {
-                        _showSettingsBottomSheet(context);
-                      },
+
+                    IgnorePointer(
+                      ignoring: !_isDrawingMode,
+                      child: GestureDetector(
+                        onPanStart: _handlePanStart,
+                        onPanUpdate: _handlePanUpdate,
+                        onPanEnd: _handlePanEnd,
+                        child: CustomPaint(
+                          painter: DrawingPainter(
+                            paths: _drawings[index] ?? [],
+                          ),
+                          child:
+                              Container(), // Required to make CustomPaint hit-testable
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        // height: 50,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8.0,
+                          horizontal: 16.0,
+                        ),
+                        color: Theme.of(
+                          context,
+                        ).scaffoldBackgroundColor.withOpacity(0.95),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16.0,
+                                    ),
+                                    child: Text(
+                                      _book!.Chapters![_currentChapter].Title ??
+                                          '',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 14.0),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Chapter ${_currentChapter + 1} of ${_book!.Chapters!.length}',
+                                    style: TextStyle(
+                                      fontSize: 12.0,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.settings),
+                              onPressed: () {
+                                _showSettingsBottomSheet(context);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
-                ),
-              ),
+                );
+              },
             ),
           ],
         ),
@@ -702,80 +930,83 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setStateSheet) {
             return SingleChildScrollView(
-            child: Container(
-              padding: const EdgeInsets.all(16.0),
-              child: Wrap(
-                // Wrap widget ka istemaal karein taaki content fit ho jaaye
-                children: <Widget>[
-                  // 1. FONT SIZE OPTION
-                  const ListTile(
-                    leading: Icon(Icons.format_size),
-                    title: Text('Font Size'),
-                  ),
-                  Slider(
-                    value: _fontSize,
-                    min: 10.0,
-                    max: 30.0,
-                    divisions: 10,
-                    label: _fontSize.round().toString(),
-                    onChanged: (double value) {
-                      // Sheet ka state update karein
-                      setStateSheet(() {
-                        _fontSize = value;
-                      });
-                      // Main screen ka state update karein
-                      setState(() {});
-                    },
-                  ),
-                  const Divider(),
+              child: Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Wrap(
+                  // Wrap widget ka istemaal karein taaki content fit ho jaaye
+                  children: <Widget>[
+                    // 1. FONT SIZE OPTION
+                    const ListTile(
+                      leading: Icon(Icons.format_size),
+                      title: Text('Font Size'),
+                    ),
+                    Slider(
+                      value: _fontSize,
+                      min: 10.0,
+                      max: 30.0,
+                      divisions: 10,
+                      label: _fontSize.round().toString(),
+                      onChanged: (double value) {
+                        // Sheet ka state update karein
+                        setStateSheet(() {
+                          _fontSize = value;
+                        });
+                        // Main screen ka state update karein
+                        setState(() {});
+                      },
+                    ),
+                    const Divider(),
 
-                  // 2. SEARCH OPTION
-                  ListTile(
-                    leading: const Icon(Icons.search),
-                    title: const Text('Search in Book'),
-                    onTap: ()async {
-                     if (_book == null || _book!.Chapters!.isEmpty) return;
+                    // 2. SEARCH OPTION
+                    ListTile(
+                      leading: const Icon(Icons.search),
+                      title: const Text('Search in Book'),
+                      onTap: () async {
+                        if (_book == null || _book!.Chapters!.isEmpty) return;
 
-                    // SearchScreen par navigate karein aur result ka intezaar karein
-                    final selectedChapter = await Navigator.push<int>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SearchScreen(chapters: _book!.Chapters!),
-                      ),
-                    );
+                        // SearchScreen par navigate karein aur result ka intezaar karein
+                        final selectedChapter = await Navigator.push<int>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                SearchScreen(chapters: _book!.Chapters!),
+                          ),
+                        );
 
-                    // Agar user ne koi result select kiya hai, to us chapter par jump karein
-                    if (selectedChapter != null && mounted) {
-                      _pageController.jumpToPage(selectedChapter);
-                    }
-                    },
-                  ),
-                  const Divider(),
+                        // Agar user ne koi result select kiya hai, to us chapter par jump karein
+                        if (selectedChapter != null && mounted) {
+                          _pageController.jumpToPage(selectedChapter);
+                        }
+                      },
+                    ),
+                    const Divider(),
 
-                  // 3. ROTATE OPTION
-                  ListTile(
-                    leading: const Icon(Icons.screen_rotation),
-                    title: const Text('Rotate Screen'),
-                    onTap: () {
-                      final currentOrientation = MediaQuery.of(context).orientation;
+                    // 3. ROTATE OPTION
+                    ListTile(
+                      leading: const Icon(Icons.screen_rotation),
+                      title: const Text('Rotate Screen'),
+                      onTap: () {
+                        final currentOrientation = MediaQuery.of(
+                          context,
+                        ).orientation;
 
-                    // Agar portrait hai to landscape karein, warna portrait karein
-                    if (currentOrientation == Orientation.portrait) {
-                      SystemChrome.setPreferredOrientations([
-                        DeviceOrientation.landscapeRight,
-                        DeviceOrientation.landscapeLeft,
-                      ]);
-                    } else {
-                      SystemChrome.setPreferredOrientations([
-                        DeviceOrientation.portraitUp,
-                        DeviceOrientation.portraitDown,
-                      ]);
-                    }
-                    },
-                  ),
-                ],
+                        // Agar portrait hai to landscape karein, warna portrait karein
+                        if (currentOrientation == Orientation.portrait) {
+                          SystemChrome.setPreferredOrientations([
+                            DeviceOrientation.landscapeRight,
+                            DeviceOrientation.landscapeLeft,
+                          ]);
+                        } else {
+                          SystemChrome.setPreferredOrientations([
+                            DeviceOrientation.portraitUp,
+                            DeviceOrientation.portraitDown,
+                          ]);
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
-            )
             );
           },
         );
