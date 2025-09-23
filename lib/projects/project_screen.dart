@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'model/project_model.dart';
 import 'project_detail_screen.dart';
+import 'project_detail_screen_expansion_pannel.dart';
 
 class ProjectScreen extends StatefulWidget {
   const ProjectScreen({super.key});
@@ -140,7 +141,11 @@ class _ProjectScreenState extends State<ProjectScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => ProjectDetailScreen(
+                                  // builder: (context) => ProjectDetailScreen(
+                                  //   projectId: project.projectId,
+                                  //   projectTitle: project.title,
+                                  // ),
+                                  builder: (context) => ProjectDetailScreenExpansionPannel(
                                     projectId: project.projectId,
                                     projectTitle: project.title,
                                   ),

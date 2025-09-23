@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:flutter_html/flutter_html.dart';
@@ -22,6 +23,35 @@ import 'viewers/image_viewer_screen.dart';
 import 'viewers/xlsx_viewer_screen.dart';
 import 'viewers/epub_viewer_screen_copy_withzoom.dart';
 import 'viewers/epub_viewer_withoutZoom.dart';
+
+class MultipartRequestWithProgress extends http.MultipartRequest {
+  final void Function(int bytes, int totalBytes) onProgress;
+
+  MultipartRequestWithProgress(
+    String method,
+    Uri url, {
+    required this.onProgress,
+  }) : super(method, url);
+
+  @override
+  http.ByteStream finalize() {
+    final byteStream = super.finalize();
+    final total = contentLength;
+    int bytes = 0;
+
+    final stream = byteStream.transform<List<int>>(
+      StreamTransformer.fromHandlers(
+        handleData: (data, sink) {
+          bytes += data.length;
+          onProgress(bytes, total);
+          sink.add(data);
+        },
+      ),
+    );
+
+    return http.ByteStream(stream);
+  }
+}
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -191,6 +221,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   void _showUploadDialog() {
     List<File> selectedFiles = [];
     bool isUploading = false;
+    double uploadProgress = 0.0;
 
     showDialog(
       context: context,
@@ -219,7 +250,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               var uri = Uri.parse(
                 'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/PostUserImage',
               );
-              var request = http.MultipartRequest('POST', uri);
+              final request = MultipartRequestWithProgress(
+                'POST',
+                uri,
+                onProgress: (bytes, totalBytes) {
+                  setDialogState(() {
+                    if (totalBytes != 0) {
+                      uploadProgress = bytes / totalBytes;
+                    }
+                  });
+                },
+              );
 
               final projid = widget.projectId.toString();
               final fid = _selectedFolder!.id.toString();
@@ -396,27 +437,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: selectedFiles.isEmpty || isUploading
-                            ? null
-                            : uploadFiles,
-                        child: isUploading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 3,
-                                ),
-                              )
-                            : const Text(
+                      child: isUploading
+                          ? Column(
+                            children: [
+                              LinearProgressIndicator(
+                                value: uploadProgress,
+                                backgroundColor: Colors.grey[300],
+                              ),
+                              const SizedBox(height: 8),
+                              Text('${(uploadProgress * 100).toStringAsFixed(0)}% Uploaded'),
+                            ],
+                          )
+                          : ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              onPressed: selectedFiles.isEmpty || isUploading
+                                  ? null
+                                  : uploadFiles,
+                              child: const Text(
                                 'Upload',
                                 style: TextStyle(fontSize: 16),
                               ),
-                      ),
+                            ),
                     ),
                   ],
                 ),
@@ -804,7 +848,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               IconButton(
                 icon: const Icon(Icons.upload_file),
                 onPressed:
-                    _showUploadDialog, // Isko dabane par upload dialog khulega
+                    _showUploadDialog,
               ),
               IconButton(
                 icon: const Icon(Icons.close),
