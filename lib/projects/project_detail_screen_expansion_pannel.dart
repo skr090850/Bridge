@@ -805,7 +805,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                   ),
                   title: Text(
                     folder.name,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+                    // style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                   trailing: Icon(
                     isExpanded ? Icons.expand_less : Icons.expand_more,
@@ -898,6 +899,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
               flex: 5,
               child: Text(
                 file.name,
+                style: Theme.of(context).textTheme.bodySmall,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
