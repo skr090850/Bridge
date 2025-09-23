@@ -336,34 +336,51 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                 final responseBody = await response.stream.bytesToString();
 
                 if (response.statusCode == 200) {
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Files uploaded successfully!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                    // Refresh the files for the current folder
-                    _handleFolderTap(_expandedFolderId!);
+                  // Server se success response ke liye body ko check karein.
+                  // Khaali body ya "1" ka matlab success hai. Baaki sab server-side error hai.
+                  final body = responseBody.trim().replaceAll('"', '');
+
+                  if (body == '1' || body.isEmpty) {
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Files uploaded successfully!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      // Nayi file dikhane ke liye current folder ko refresh karein
+                      if (_expandedFolderId != null) {
+                        // YEH SAHI TAREKA HAI REFRESH KARNE KA
+                        _handleFolderTap(_expandedFolderId!);
+                      }
+                    }
+                  } else {
+                    // Server ne 200 OK bheja, lekin body mein error message hai.
+                    throw Exception(
+                        'Upload failed: ${body.isNotEmpty ? body : "Unknown server error"}');
                   }
                 } else {
+                  // Server ne non-200 status code bheja.
                   throw Exception(
                       'Upload failed. Server error: ${response.statusCode}');
                 }
               } catch (e) {
                 if (mounted) {
+                  // Error yahaan catch hoga aur user ko dikhaya jayega.
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('An error occurred: $e'),
+                      content: Text('$e'),
                       backgroundColor: Colors.red,
                     ),
                   );
                 }
               } finally {
-                setDialogState(() {
-                  isUploading = false;
-                });
+                if (mounted) { // mounted check yahan bhi zaroori hai
+                  setDialogState(() {
+                    isUploading = false;
+                  });
+                }
               }
             }
 
@@ -385,11 +402,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                   ),
                 ],
               ),
-              content: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.8,
-                  minWidth: 300,
-                ),
+              content: SizedBox(
+                // constraints: BoxConstraints(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  // minWidth: 300,
+                // ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

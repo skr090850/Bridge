@@ -1,3 +1,4 @@
+import 'package:bridge/projects/project_detail_screen_expansion_pannel.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -259,7 +260,8 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => ProjectDetailScreen(
+                // builder: (context) => ProjectDetailScreen(
+                builder:(context) => ProjectDetailScreenExpansionPannel(
                   projectId: project.projectId,
                   projectTitle: project.projectName,
                 ),
