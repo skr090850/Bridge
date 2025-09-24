@@ -17,13 +17,14 @@ import 'model/file_model.dart';
 import 'model/project_member_model.dart';
 
 // Assuming your viewers are in these locations. Adjust if necessary.
-import 'viewers/doc_viewer_screen.dart';
+// import 'viewers/doc_viewer_screen.dart';
 import 'viewers/pdf_viewer_screen.dart';
 import 'viewers/epub_viewer_screen.dart';
 import 'viewers/text_viewer_screen.dart';
 import 'viewers/image_viewer_screen.dart';
 import 'viewers/xlsx_viewer_screen.dart';
 import 'viewers/epub_viewer_screen_copy_withzoom.dart';
+import 'viewers/word_doc_viewer_screen.dart';
 // import 'viewers/epub_viewer_withoutZoom.dart';
 
 /// A custom MultipartRequest that provides upload progress updates.
@@ -217,23 +218,23 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
 
   void _openFile(String filePath, String fileName, int fileId) {
     final extension = fileName.split('.').last.toLowerCase();
-    const officeExtensions = ['doc', 'docx', 'pptx'];
+    // const officeExtensions = ['doc', 'docx', 'pptx'];
     const imageExtensions = ['png', 'jpg', 'jpeg'];
 
-    if (officeExtensions.contains(extension)) {
-      final fileUrl =
-          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
-      final viewerUrl =
-          'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
-        ),
-      );
-      return;
-    }
+    // if (officeExtensions.contains(extension)) {
+    //   final fileUrl =
+    //       'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
+    //   final viewerUrl =
+    //       'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
+    //   Navigator.push(
+    //     context,
+    //     MaterialPageRoute(
+    //       builder: (_) =>
+    //           DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
+    //     ),
+    //   );
+    //   return;
+    // }
 
     Widget? viewer;
     if (extension == 'pdf') {
@@ -246,6 +247,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       viewer = ImageViewerScreen(filePath: filePath, fileName: fileName);
     } else if (extension == 'xlsx') {
       viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName);
+    } else if (extension == 'docx' || extension == 'doc') {
+      viewer = DocViewerScreen(filePath: filePath, fileName: fileName);
     }
 
     if (viewer != null) {
