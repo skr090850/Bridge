@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:epubx/epubx.dart' hide Image;
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
@@ -220,6 +221,65 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
     }
   }
 
+  Future<void> _loadProgressFromServer() async {
+    if (_book == null) return;
+
+    String bookId =
+        _book?.Schema?.Package?.Metadata?.Identifiers?.first?.Id ??
+        widget.fileName;
+    try {
+      final uri = Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/get-progress?userId=${widget.userId}&bookId=$bookId',
+      );
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['currentPage'] != null) {
+          final serverPage = data['currentPage'] as int;
+          if (serverPage < _book!.Chapters!.length) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_pageController.hasClients) {
+                _pageController.jumpToPage(serverPage);
+                setState(() => _currentChapter = serverPage);
+              }
+            });
+            return;
+          }
+        }
+      }
+
+      await _loadLastPage();
+    } catch (e) {
+      debugPrint(
+        "Server se progress fetch nahi hua, local se try kar rahe hain: $e",
+      );
+      await _loadLastPage();
+    }
+  }
+
+  void _updateProgressOnServer(int pageIndex) async {
+    if (_book == null) return;
+    String bookId =
+        _book?.Schema?.Package?.Metadata?.Identifiers?.first?.Id ??
+        widget.fileName;
+
+    try {
+      http.post(
+        Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/update-progress'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'userId': widget.userId,
+          'bookId': bookId,
+          'currentPage': pageIndex,
+        }),
+      );
+    } catch (e) {
+      debugPrint("Server par progress update nahi hua: $e");
+    }
+  }
+
   Future<void> _loadLastPage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -317,7 +377,8 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
         _isFixedLayout = isFixedLayout;
         _parseCssFromBook();
       });
-      await _loadLastPage();
+      // await _loadLastPage();
+      await _loadProgressFromServer();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -585,11 +646,12 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
               onPageChanged: (index) {
                 setState(() {
                   _currentChapter = index;
-                  _isDrawingMode = false; // Exit drawing mode on page change
+                  _isDrawingMode = false;
                   _isErasing = false;
                 });
                 _transformationController.value = Matrix4.identity();
-                _saveCurrentPage(index); // Save progress
+                _saveCurrentPage(index);
+                _updateProgressOnServer(index);
               },
               itemBuilder: (context, index) {
                 final chapter = _book!.Chapters![index];
