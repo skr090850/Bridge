@@ -14,6 +14,7 @@ class MembersScreen extends StatefulWidget {
 
 class _MembersScreenState extends State<MembersScreen> {
   late Future<List<Member>> _membersFuture;
+  int? _userId;
 
   @override
   void didChangeDependencies() {
@@ -21,8 +22,8 @@ class _MembersScreenState extends State<MembersScreen> {
     final arguments =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
 
-    final int userId = arguments?['userId'] ?? 1000;
-    _membersFuture = _fetchMembers(userId);
+    _userId = arguments?['userId'] ?? 1000;
+    _membersFuture = _fetchMembers(_userId!);
   }
 
   Future<List<Member>> _fetchMembers(int userId) async {
@@ -107,6 +108,7 @@ class _MembersScreenState extends State<MembersScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => MemberDetailScreen(
+                                  userId: _userId!,
                                   memberId: member.id,
                                   memberName: member.displayname),
                             ),

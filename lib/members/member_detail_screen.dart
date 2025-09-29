@@ -11,9 +11,10 @@ import '../projects/project_detail_screen.dart';
 class MemberDetailScreen extends StatefulWidget {
   final int memberId;
   final String memberName;
+  final int userId;
 
   const MemberDetailScreen(
-      {super.key, required this.memberId, required this.memberName});
+      {super.key, required this.memberId, required this.memberName, required this.userId});
 
   @override
   State<MemberDetailScreen> createState() => _MemberDetailScreenState();
@@ -262,6 +263,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
               MaterialPageRoute(
                 // builder: (context) => ProjectDetailScreen(
                 builder:(context) => ProjectDetailScreenExpansionPannel(
+                  userId: widget.userId,
                   projectId: project.projectId,
                   projectTitle: project.projectName,
                 ),

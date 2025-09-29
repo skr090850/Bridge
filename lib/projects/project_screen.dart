@@ -14,6 +14,7 @@ class ProjectScreen extends StatefulWidget {
 
 class _ProjectScreenState extends State<ProjectScreen> {
   late Future<List<Project>> _projectsFuture;
+  int? _userId;
 
   @override
   void didChangeDependencies() {
@@ -24,10 +25,11 @@ class _ProjectScreenState extends State<ProjectScreen> {
     if (arguments != null &&
         arguments.containsKey('userId') &&
         arguments.containsKey('userRole')) {
-      final int userId = arguments['userId'];
+      _userId = arguments['userId'];
       final String userRole = arguments['userRole'];
-      _projectsFuture = _fetchProjects(userId, userRole);
+      _projectsFuture = _fetchProjects(_userId!, userRole);
     } else {
+      _userId = 1000;
       _projectsFuture = _fetchProjects(1000, 'sysadmin');
     }
   }
@@ -121,7 +123,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                         children: [
                           ListTile(
                             leading: Image.asset(
-                              'assets/images/setting.jpg', // Icon ko Image.asset se badla gaya
+                              'assets/images/setting.jpg',
                               width: 30,
                               height: 30,
                               errorBuilder: (context, error, stackTrace) {
@@ -146,6 +148,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
                                   //   projectTitle: project.title,
                                   // ),
                                   builder: (context) => ProjectDetailScreenExpansionPannel(
+                                    userId:_userId!,
                                     projectId: project.projectId,
                                     projectTitle: project.title,
                                   ),

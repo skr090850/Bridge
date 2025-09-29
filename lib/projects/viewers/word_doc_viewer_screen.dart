@@ -495,21 +495,21 @@ class DocxParser {
 // ----------------- FLUTTER UI -----------------------
 // ----------------------------------------------------
 
-class DocViewerScreen extends StatefulWidget {
+class WordDocViewerScreen extends StatefulWidget {
   final String filePath;
   final String fileName;
 
-  const DocViewerScreen({
+  const WordDocViewerScreen({
     Key? key,
     required this.filePath,
     required this.fileName,
   }) : super(key: key);
 
   @override
-  State<DocViewerScreen> createState() => _DocViewerScreenState();
+  State<WordDocViewerScreen> createState() => _DocViewerScreenState();
 }
 
-class _DocViewerScreenState extends State<DocViewerScreen> {
+class _DocViewerScreenState extends State<WordDocViewerScreen> {
   List<Widget> _documentContent = [];
   bool _isLoading = true;
   String _error = '';

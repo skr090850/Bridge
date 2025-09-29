@@ -17,7 +17,7 @@ import 'model/file_model.dart';
 import 'model/project_member_model.dart';
 
 // Assuming your viewers are in these locations. Adjust if necessary.
-// import 'viewers/doc_viewer_screen.dart';
+import 'viewers/doc_viewer_screen.dart';
 import 'viewers/pdf_viewer_screen.dart';
 import 'viewers/epub_viewer_screen.dart';
 import 'viewers/text_viewer_screen.dart';
@@ -27,7 +27,6 @@ import 'viewers/epub_viewer_screen_copy_withzoom.dart';
 import 'viewers/word_doc_viewer_screen.dart';
 // import 'viewers/epub_viewer_withoutZoom.dart';
 
-/// A custom MultipartRequest that provides upload progress updates.
 class MultipartRequestWithProgress extends http.MultipartRequest {
   final void Function(int bytes, int totalBytes) onProgress;
 
@@ -60,11 +59,14 @@ class MultipartRequestWithProgress extends http.MultipartRequest {
 class ProjectDetailScreenExpansionPannel extends StatefulWidget {
   final int projectId;
   final String projectTitle;
+  final int userId;
 
   const ProjectDetailScreenExpansionPannel({
     super.key,
     required this.projectId,
     required this.projectTitle,
+    required this.userId,
+    
   });
 
   @override
@@ -74,13 +76,11 @@ class ProjectDetailScreenExpansionPannel extends StatefulWidget {
 class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel> {
   late Future<List<Folder>> _foldersFuture;
 
-  // State variables for the new accordion UI
   int? _expandedFolderId;
   List<FileModel> _currentFiles = [];
   bool _isLoadingFiles = false;
-  List<Folder> _folderList = []; // To hold folder data for dialogs
+  List<Folder> _folderList = [];
 
-  // State variables for file operations
   bool _isDownloading = false;
   String _downloadingFileName = '';
 
@@ -90,7 +90,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     _foldersFuture = _fetchFolders(widget.projectId);
   }
 
-  // --- API Fetching Methods ---
 
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
@@ -102,7 +101,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       final folders = data.map((json) => Folder.fromJson(json)).toList();
       if (mounted) {
         setState(() {
-          _folderList = folders; // Store the list for later use
+          _folderList = folders;
         });
       }
       return folders;
@@ -137,11 +136,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     }
   }
 
-  // --- UI Interaction Logic ---
 
-  /// Handles folder expansion and initiates file loading.
   Future<void> _handleFolderTap(int folderId) async {
-    // If the same folder is tapped again, collapse it.
     if (_expandedFolderId == folderId) {
       setState(() {
         _expandedFolderId = null;
@@ -150,16 +146,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       return;
     }
 
-    // Otherwise, expand the new folder and load its files.
     setState(() {
       _expandedFolderId = folderId;
       _isLoadingFiles = true;
-      _currentFiles = []; // Clear previous files
+      _currentFiles = [];
     });
 
     try {
       final files = await _fetchFiles(widget.projectId, folderId);
-      // Ensure the user hasn't tapped another folder while this one was loading
       if (mounted && _expandedFolderId == folderId) {
         setState(() {
           _currentFiles = files;
@@ -178,7 +172,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     }
   }
 
-  // --- File Handling Methods ---
 
   Future<void> _handleFileTap(int fileId, String fileName) async {
     setState(() {
@@ -219,28 +212,29 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
   void _openFile(String filePath, String fileName, int fileId) {
     final extension = fileName.split('.').last.toLowerCase();
     // const officeExtensions = ['doc', 'docx', 'pptx'];
+    const officeExtensions = ['pptx'];
     const imageExtensions = ['png', 'jpg', 'jpeg'];
 
-    // if (officeExtensions.contains(extension)) {
-    //   final fileUrl =
-    //       'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
-    //   final viewerUrl =
-    //       'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
-    //   Navigator.push(
-    //     context,
-    //     MaterialPageRoute(
-    //       builder: (_) =>
-    //           DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
-    //     ),
-    //   );
-    //   return;
-    // }
+    if (officeExtensions.contains(extension)) {
+      final fileUrl =
+          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
+      final viewerUrl =
+          'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
+        ),
+      );
+      return;
+    }
 
     Widget? viewer;
     if (extension == 'pdf') {
       viewer = PdfViewerScreen(filePath: filePath, fileName: fileName);
     } else if (extension == 'epub') {
-      viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName);
+      viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName, userId: widget.userId,);
     } else if (extension == 'txt') {
       viewer = TextViewerScreen(filePath: filePath, fileName: fileName);
     } else if (imageExtensions.contains(extension)) {
@@ -248,7 +242,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     } else if (extension == 'xlsx') {
       viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName);
     } else if (extension == 'docx' || extension == 'doc') {
-      viewer = DocViewerScreen(filePath: filePath, fileName: fileName);
+      viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName);
     }
 
     if (viewer != null) {
@@ -318,7 +312,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
               );
 
               final projid = widget.projectId.toString();
-              final fid = _expandedFolderId.toString(); // MODIFIED
+              final fid = _expandedFolderId.toString();
               final uid = '1000';
 
               request.fields['projid'] = projid;

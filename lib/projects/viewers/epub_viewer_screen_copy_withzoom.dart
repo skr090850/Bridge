@@ -57,11 +57,13 @@ class DrawingPainter extends CustomPainter {
 class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
   final String fileName;
+  final int userId;
 
   const EpubViewerScreenCopy({
     Key? key,
     required this.filePath,
     required this.fileName,
+    required this.userId,
   }) : super(key: key);
 
   @override
@@ -288,7 +290,6 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
           }
         }
       }
-      // --- START: DETECT FIXED-LAYOUT EPUB ---
       bool isFixedLayout = false;
       if (book.Content?.Html != null) {
         for (final htmlFile in book.Content!.Html!.values) {
@@ -300,7 +301,6 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
           }
         }
       }
-      // --- END: DETECT FIXED-LAYOUT EPUB ---
 
       final images = <String, Uint8List>{};
       book.Content?.Images?.forEach((key, value) {

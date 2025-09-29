@@ -10,10 +10,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController =
-      TextEditingController(text: 'sysadmin');
-  final TextEditingController _passwordController =
-      TextEditingController(text: 'admin');
+  final TextEditingController _usernameController = TextEditingController(
+    text: 'sysadmin',
+  );
+  final TextEditingController _passwordController = TextEditingController(
+    text: 'admin',
+  );
   bool _isLoading = false;
 
   Future<void> _login() async {
@@ -46,8 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                  content: Text('Login Successful'),
-                  backgroundColor: Colors.green),
+                content: Text('Login Successful'),
+                backgroundColor: Colors.green,
+              ),
             );
 
             Future.delayed(const Duration(seconds: 1), () {
@@ -60,8 +63,9 @@ class _LoginScreenState extends State<LoginScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                  content: Text("Invalid username or password"),
-                  backgroundColor: Colors.red),
+                content: Text("Invalid username or password"),
+                backgroundColor: Colors.red,
+              ),
             );
           }
         }
@@ -69,9 +73,11 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content:
-                    Text('Login Failed. Server error: ${response.statusCode}'),
-                backgroundColor: Colors.red),
+              content: Text(
+                'Login Failed. Server error: ${response.statusCode}',
+              ),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
@@ -82,8 +88,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('An error occurred: $e'),
-              backgroundColor: Colors.red),
+            content: Text('An error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -134,7 +141,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 3))
+                            color: Colors.white,
+                            strokeWidth: 3,
+                          ),
+                        )
                       : const Text('Login', style: TextStyle(fontSize: 18)),
                 ),
               ),
@@ -150,4 +160,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-

@@ -194,9 +194,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     Widget? viewer;
     if (extension == 'pdf')
       viewer = PdfViewerScreen(filePath: filePath, fileName: fileName);
-    else if (extension == 'epub')
+    // else if (extension == 'epub')
       // viewer = EpubViewerScreen(filePath: filePath, fileName: fileName);
-      viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName);
+      // viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName);
     // viewer = EpubViewer(filePath: filePath, fileName: fileName);
     else if (extension == 'txt')
       viewer = TextViewerScreen(filePath: filePath, fileName: fileName);
