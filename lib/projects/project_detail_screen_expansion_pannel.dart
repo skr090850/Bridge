@@ -25,6 +25,7 @@ import 'viewers/image_viewer_screen.dart';
 import 'viewers/xlsx_viewer_screen.dart';
 import 'viewers/epub_viewer_screen_copy_withzoom.dart';
 import 'viewers/doc_file_reader/word_doc_viewer_screen.dart';
+import 'viewers/ppt_file_reader/viewer_screen.dart';
 // import 'viewers/epub_viewer_withoutZoom.dart';
 
 class MultipartRequestWithProgress extends http.MultipartRequest {
@@ -212,23 +213,23 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
   void _openFile(String filePath, String fileName, int fileId) {
     final extension = fileName.split('.').last.toLowerCase();
     // const officeExtensions = ['doc', 'docx', 'pptx'];
-    const officeExtensions = ['pptx'];
+    // const officeExtensions = ['pptx'];
     const imageExtensions = ['png', 'jpg', 'jpeg'];
 
-    if (officeExtensions.contains(extension)) {
-      final fileUrl =
-          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
-      final viewerUrl =
-          'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
-        ),
-      );
-      return;
-    }
+    // if (officeExtensions.contains(extension)) {
+    //   final fileUrl =
+    //       'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
+    //   final viewerUrl =
+    //       'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
+    //   Navigator.push(
+    //     context,
+    //     MaterialPageRoute(
+    //       builder: (_) =>
+    //           DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
+    //     ),
+    //   );
+    //   return;
+    // }
 
     Widget? viewer;
     if (extension == 'pdf') {
@@ -243,6 +244,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     } else if (extension == 'docx' || extension == 'doc') {
       viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+    } else if (extension == 'pptx' || extension == 'ppt') {
+      viewer = PptxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     }
 
     if (viewer != null) {
