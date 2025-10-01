@@ -59,12 +59,14 @@ class EpubViewerScreenCopy extends StatefulWidget {
   final String filePath;
   final String fileName;
   final int userId;
+  final int fileId;
 
   const EpubViewerScreenCopy({
     Key? key,
     required this.filePath,
     required this.fileName,
     required this.userId,
+    required this.fileId,
   }) : super(key: key);
 
   @override
@@ -229,16 +231,16 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
         widget.fileName;
     try {
       final uri = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/get-progress?userId=${widget.userId}&bookId=$bookId',
+        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}',
       );
 
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['success'] == true && data['currentPage'] != null) {
+        if (data['status'] == true && data['currentPage'] != null) {
           final serverPage = data['currentPage'] as int;
-          if (serverPage < _book!.Chapters!.length) {
+          if (_book != null && serverPage < _book!.Chapters!.length) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (_pageController.hasClients) {
                 _pageController.jumpToPage(serverPage);
@@ -260,25 +262,27 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   }
 
   void _updateProgressOnServer(int pageIndex) async {
-    if (_book == null) return;
-    String bookId =
-        _book?.Schema?.Package?.Metadata?.Identifiers?.first?.Id ??
-        widget.fileName;
-
-    try {
-      http.post(
-        Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/update-progress'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'userId': widget.userId,
-          'bookId': bookId,
-          'currentPage': pageIndex,
-        }),
-      );
-    } catch (e) {
-      debugPrint("Server par progress update nahi hua: $e");
+  try {
+    final response = await http.post(
+      Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/Bridge/UpdateFileReadingStatus'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'uid': widget.userId,
+        'fileId': widget.fileId,
+        'currentPage': pageIndex,
+      }),
+    );
+    if (response.statusCode == 200) {
+      final success = json.decode(response.body);
+      if (success == true) {
+        debugPrint('Progress for fileId ${widget.fileId} saved on server.');
+      }
     }
+
+  } catch (e) {
+    debugPrint("Server par progress update nahi hua: $e");
   }
+}
 
   Future<void> _loadLastPage() async {
     try {

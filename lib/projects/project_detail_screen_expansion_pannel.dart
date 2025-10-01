@@ -24,7 +24,7 @@ import 'viewers/text_viewer_screen.dart';
 import 'viewers/image_viewer_screen.dart';
 import 'viewers/xlsx_viewer_screen.dart';
 import 'viewers/epub_viewer_screen_copy_withzoom.dart';
-import 'viewers/word_doc_viewer_screen.dart';
+import 'viewers/doc_file_reader/word_doc_viewer_screen.dart';
 // import 'viewers/epub_viewer_withoutZoom.dart';
 
 class MultipartRequestWithProgress extends http.MultipartRequest {
@@ -232,17 +232,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
 
     Widget? viewer;
     if (extension == 'pdf') {
-      viewer = PdfViewerScreen(filePath: filePath, fileName: fileName);
+      viewer = PdfViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     } else if (extension == 'epub') {
-      viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName, userId: widget.userId,);
+      viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     } else if (extension == 'txt') {
-      viewer = TextViewerScreen(filePath: filePath, fileName: fileName);
+      viewer = TextViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     } else if (imageExtensions.contains(extension)) {
       viewer = ImageViewerScreen(filePath: filePath, fileName: fileName);
     } else if (extension == 'xlsx') {
-      viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName);
+      viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     } else if (extension == 'docx' || extension == 'doc') {
-      viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName);
+      viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     }
 
     if (viewer != null) {
