@@ -225,10 +225,6 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
 
   Future<void> _loadProgressFromServer() async {
     if (_book == null) return;
-
-    String bookId =
-        _book?.Schema?.Package?.Metadata?.Identifiers?.first?.Id ??
-        widget.fileName;
     try {
       final uri = Uri.parse(
         'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}',
@@ -272,15 +268,15 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
         'currentPage': pageIndex,
       }),
     );
-    if (response.statusCode == 200) {
-      final success = json.decode(response.body);
-      if (success == true) {
-        debugPrint('Progress for fileId ${widget.fileId} saved on server.');
-      }
-    }
+    // if (response.statusCode == 200) {
+      // final success = json.decode(response.body);
+      // if (success == true) {
+      //   debugPrint('Progress for fileId ${widget.fileId} saved on server.');
+      // }
+    // }
 
   } catch (e) {
-    debugPrint("Server par progress update nahi hua: $e");
+    // debugPrint("Server par progress update nahi hua: $e");
   }
 }
 
