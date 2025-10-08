@@ -18,65 +18,63 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   @override
   void didChangeDependencies() {
-    super.didChangeDependencies();
-    final arguments =
-        ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+  super.didChangeDependencies();
+  final arguments =
+      ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
 
-    if (arguments != null &&
-        arguments.containsKey('userId') &&
-        arguments.containsKey('userRole')) {
-      _userId = arguments['userId'];
-      final String userRole = arguments['userRole'];
-      _projectsFuture = _fetchProjects(_userId!, userRole);
-    } else {
-      _userId = 1000;
-      _projectsFuture = _fetchProjects(1000, 'sysadmin');
-    }
+  if (arguments != null && arguments.containsKey('userId')) {
+    _userId = arguments['userId'];
+    _projectsFuture = _fetchProjects(_userId!);
+  } else {
+    _userId = null;
+    _projectsFuture = Future.error('Authentication Error: User ID not found. Please log in again.');
+  }
+}
+
+
+Future<List<Project>> _fetchProjects(int userId) async {
+  String apiUrl;
+  
+  if (userId == 1000) {
+    apiUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
+  } 
+  else {
+    apiUrl =
+        'http://183.82.115.221/Bridge/BridgeApi/api/Template/myprocjectuser';
   }
 
-  Future<List<Project>> _fetchProjects(int userId, String userRole) async {
-    String apiUrl;
-    
-    if (userRole.toLowerCase() == 'sysadmin') {
-      apiUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
-    } else {
-      apiUrl =
-          'http://183.82.115.221/Bridge/BridgeApi/api/Template/myprocjectuser';
-    }
+  try {
+    final response = await http.post(
+      Uri.parse(apiUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'uid': userId, 'skip': 0, 'take': 20, 'srch': ''}),
+    );
 
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'uid': userId, 'skip': 0, 'take': 20, 'srch': ''}),
-      );
-
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        
-        if (responseData is Map<String, dynamic> &&
-            responseData.containsKey('projects')) {
-          final List<dynamic> projectsJson = responseData['projects'];
-          return projectsJson.map((json) => Project.fromJson(json)).toList();
-        } else if (responseData is List) {
-          return responseData.map((json) => Project.fromJson(json)).toList();
-        } 
-        else if (responseData is String) {
-          final List<dynamic> projectsJson = json.decode(responseData);
-          return projectsJson.map((json) => Project.fromJson(json)).toList();
-        }
-        else {
-          throw Exception('Unexpected JSON format from API');
-        }
-      } else {
-        throw Exception(
-            'Failed to load projects. Status code: ${response.statusCode}');
+    if (response.statusCode == 200) {
+      final responseData = json.decode(response.body);
+      
+      if (responseData is Map<String, dynamic> &&
+          responseData.containsKey('projects')) {
+        final List<dynamic> projectsJson = responseData['projects'];
+        return projectsJson.map((json) => Project.fromJson(json)).toList();
+      } else if (responseData is List) {
+        return responseData.map((json) => Project.fromJson(json)).toList();
+      } 
+      else if (responseData is String) {
+        final List<dynamic> projectsJson = json.decode(responseData);
+        return projectsJson.map((json) => Project.fromJson(json)).toList();
       }
-    } catch (e) {
-      // debugPrint('An error occurred while fetching projects: $e');
-      throw Exception('An error occurred while fetching data.');
+      else {
+        throw Exception('Unexpected JSON format from API');
+      }
+    } else {
+      throw Exception(
+          'Failed to load projects. Status code: ${response.statusCode}');
     }
+  } catch (e) {
+    throw Exception('An error occurred while fetching data.');
   }
+}
 
   @override
   Widget build(BuildContext context) {

@@ -21,22 +21,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if(mounted) _startScrolling();
+      if (mounted) _startScrolling();
     });
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Text('Confirm Logout'),
+          content: const Text('Are you sure you want to log out?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pushNamedAndRemoveUntil(
+                  '/',
+                  (Route<dynamic> route) => false,
+                );
+              },
+              child: const Text('Yes'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _startScrolling() {
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(seconds: 10),
-          curve: Curves.linear,
-        ).then((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.jumpTo(0);
-          }
-        });
+        _scrollController
+            .animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(seconds: 10),
+              curve: Curves.linear,
+            )
+            .then((_) {
+              if (_scrollController.hasClients) {
+                _scrollController.jumpTo(0);
+              }
+            });
       }
     });
   }
@@ -75,7 +106,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: const Text(
                         'Welcome to the Bridge App... Your one-stop solution for project management...',
                         style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w500),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -113,36 +146,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context,
                   imagePath: 'assets/images/setting.jpg',
                   label: 'PROJECTS',
-                  onTap: () => Navigator.pushNamed(context, '/project',
-                      arguments: arguments),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/project',
+                    arguments: arguments,
+                  ),
                 ),
                 _buildDashboardItem(
                   context,
                   imagePath: 'assets/images/members.jpg',
                   label: 'MEMBERS',
-                  onTap: () => Navigator.pushNamed(context, '/members',
-                      arguments: arguments),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/members',
+                    arguments: arguments,
+                  ),
                 ),
                 _buildDashboardItem(
                   context,
                   imagePath: 'assets/images/alert.jpg',
                   label: 'ALERTS',
-                  onTap: () => Navigator.pushNamed(context, '/alerts',
-                      arguments: arguments),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/alerts',
+                    arguments: arguments,
+                  ),
                 ),
                 _buildDashboardItem(
                   context,
                   imagePath: 'assets/images/high_risk.jpg',
                   label: 'HELPDESK',
-                  onTap: () => Navigator.pushNamed(context, '/helpdesk',
-                      arguments: arguments),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/helpdesk',
+                    arguments: arguments,
+                  ),
                 ),
                 _buildDashboardItem(
                   context,
                   imagePath: 'assets/images/status.jpg',
                   label: 'STATUS',
-                  onTap: () => Navigator.pushNamed(context, '/status',
-                      arguments: arguments),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/status',
+                    arguments: arguments,
+                  ),
                 ),
                 _buildDashboardItem(
                   context,
@@ -162,14 +210,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final arguments =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
     final Color primaryColor = Theme.of(context).colorScheme.primary;
-    
+
     final List<Widget> _screens = [
       _buildDashboardGrid(arguments),
-      const HelpdeskScreen(),       
-      const ScanScreen(),         
-      const AlertsScreen(), 
+      const HelpdeskScreen(),
+      const ScanScreen(),
+      const AlertsScreen(),
     ];
-    
+
     final List<String> _screenTitles = [
       'Dashboard',
       'Issues',
@@ -178,13 +226,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return Scaffold(
-      appBar: _selectedIndex ==0 ?  AppBar(
-        title: Text(_screenTitles[_selectedIndex]),
-      ):null,
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      appBar: _selectedIndex == 0
+          ? AppBar(
+              title: Text(_screenTitles[_selectedIndex]),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'Logout',
+                  onPressed: () {
+                    _showLogoutDialog(
+                      context,
+                    );
+                  },
+                ),
+              ],
+            )
+          : null,
+      body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
@@ -255,4 +313,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
-

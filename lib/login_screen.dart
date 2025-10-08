@@ -18,83 +18,92 @@ class _LoginScreenState extends State<LoginScreen> {
   );
   bool _isLoading = false;
 
-  Future<void> _login() async {
+Future<void> _login() async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  const String apiUrl =
+      'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/getLogin';
+  try {
+    final response = await http.post(
+      Uri.parse(apiUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'uid': _usernameController.text,
+        'pwd': _passwordController.text,
+      }),
+    );
+
+    if (!mounted) return;
+
     setState(() {
-      _isLoading = true;
+      _isLoading = false;
     });
 
-    const String apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/getLogin';
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'uid': _usernameController.text,
-          'pwd': _passwordController.text,
-        }),
-      );
+    if (response.statusCode == 200) {
+      final decodedResponse = json.decode(response.body);
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (decodedResponse is Map<String, dynamic> &&
+          decodedResponse['status'] == '0') {
+        
+        final String userIdString = decodedResponse['message'] ?? '';
+        final int? userId = int.tryParse(userIdString);
 
-      if (response.statusCode == 200) {
-        String responseBodyStr = response.body;
-        final decodedResponse = json.decode(responseBodyStr);
-
-        if (decodedResponse is Map<String, dynamic> &&
-            decodedResponse['status'] == '0') {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Login Successful'),
-                backgroundColor: Colors.green,
-              ),
-            );
-
-            Future.delayed(const Duration(seconds: 1), () {
-              if (mounted) {
-                Navigator.pushReplacementNamed(context, '/dashboard');
-              }
-            });
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Invalid username or password"),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      } else {
-        if (mounted) {
+        if (userId != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Login Failed. Server error: ${response.statusCode}',
-              ),
+            const SnackBar(
+              content: Text('Login Successful'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          Navigator.pushReplacementNamed(
+            context,
+            '/dashboard',
+            arguments: {
+              'userId': userId,
+            },
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Login Failed: Invalid User ID received from server."),
               backgroundColor: Colors.red,
             ),
           );
         }
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      if (mounted) {
+
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('An error occurred: $e'),
+          const SnackBar(
+            content: Text("Invalid username or password"),
             backgroundColor: Colors.red,
           ),
         );
       }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Login Failed. Server error: ${response.statusCode}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {

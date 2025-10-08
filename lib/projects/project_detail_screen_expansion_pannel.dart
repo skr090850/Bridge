@@ -10,13 +10,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:intl/intl.dart';
 
-// Assuming your models are in these locations. Adjust if necessary.
 import 'model/project_model.dart';
 import 'model/folder_model.dart';
 import 'model/file_model.dart';
 import 'model/project_member_model.dart';
+import 'model/user_project_model.dart';
 
-// Assuming your viewers are in these locations. Adjust if necessary.
+import 'viewers/doc_viewer_screen_using_api.dart';
 import 'viewers/doc_viewer_screen.dart';
 import 'viewers/pdf_viewer_screen.dart';
 import 'viewers/epub_viewer_screen.dart';
@@ -27,7 +27,11 @@ import 'viewers/epub_viewer_screen_copy_withzoom.dart';
 import 'viewers/doc_file_reader/word_doc_viewer_screen.dart';
 import 'viewers/ppt_file_reader/viewer_screen.dart';
 // import 'viewers/epub_viewer_withoutZoom.dart';
-
+class FileLog {
+  final String fileName;
+  final int lastPage;
+  FileLog({required this.fileName, required this.lastPage});
+}
 class MultipartRequestWithProgress extends http.MultipartRequest {
   final void Function(int bytes, int totalBytes) onProgress;
 
@@ -90,7 +94,58 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     super.initState();
     _foldersFuture = _fetchFolders(widget.projectId);
   }
-
+  void _showUserLogsDrawer() {
+    showModalBottomSheet(
+        context: context,
+        builder: (context) {
+          return FutureBuilder<List<ProjectMember>>(
+            future: _fetchProjectMembers(widget.projectId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final members = snapshot.data!;
+              return ListView.builder(
+                itemCount: members.length,
+                itemBuilder: (context, index) {
+                  final member = members[index];
+                  return ListTile(
+                    leading: CircleAvatar(child: Text(member.name[0].toUpperCase())),
+                    title: Text(member.name),
+                    onTap: () {
+                      Navigator.pop(context); // Drawer band karein
+                      _showUserActivityPopup(member.id, member.name);
+                    },
+                  );
+                },
+              );
+            },
+          );
+        });
+  }
+  void _showUserActivityPopup(int memberId, String memberName) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Activity for $memberName"),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: UserActivityLog(userId: memberId),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            )
+          ],
+        );
+      },
+    );
+  }
 
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
@@ -212,24 +267,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
 
   void _openFile(String filePath, String fileName, int fileId) {
     final extension = fileName.split('.').last.toLowerCase();
-    // const officeExtensions = ['doc', 'docx', 'pptx'];
+    const officeExtensions = ['doc', 'docx', 'pptx'];
     // const officeExtensions = ['pptx'];
     const imageExtensions = ['png', 'jpg', 'jpeg'];
 
-    // if (officeExtensions.contains(extension)) {
-    //   final fileUrl =
-    //       'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
-    //   final viewerUrl =
-    //       'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
-    //   Navigator.push(
-    //     context,
-    //     MaterialPageRoute(
-    //       builder: (_) =>
-    //           DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
-    //     ),
-    //   );
-    //   return;
-    // }
+    if (officeExtensions.contains(extension)) {
+      final fileUrl =
+          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
+      final viewerUrl =
+          'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              DocViewerScreen(fileUrl: viewerUrl, fileName: fileName,),
+        ),
+      );
+      return;
+    }
 
     Widget? viewer;
     if (extension == 'pdf') {
@@ -242,10 +297,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       viewer = ImageViewerScreen(filePath: filePath, fileName: fileName);
     } else if (extension == 'xlsx') {
       viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
-    } else if (extension == 'docx' || extension == 'doc') {
-      viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
-    } else if (extension == 'pptx' || extension == 'ppt') {
-      viewer = PptxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+    // } else if (extension == 'docx' || extension == 'doc') {
+    //   viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+    // } else if (extension == 'pptx' || extension == 'ppt') {
+    //   viewer = PptxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     }
 
     if (viewer != null) {
@@ -316,7 +371,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
 
               final projid = widget.projectId.toString();
               final fid = _expandedFolderId.toString();
-              final uid = '1000';
+              final uid = widget.userId.toString();
 
               request.fields['projid'] = projid;
               request.fields['fid'] = fid;
@@ -336,8 +391,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                 final responseBody = await response.stream.bytesToString();
 
                 if (response.statusCode == 200) {
-                  // Server se success response ke liye body ko check karein.
-                  // Khaali body ya "1" ka matlab success hai. Baaki sab server-side error hai.
                   final body = responseBody.trim().replaceAll('"', '');
 
                   if (body == '1' || body.isEmpty) {
@@ -349,25 +402,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                           backgroundColor: Colors.green,
                         ),
                       );
-                      // Nayi file dikhane ke liye current folder ko refresh karein
                       if (_expandedFolderId != null) {
-                        // YEH SAHI TAREKA HAI REFRESH KARNE KA
                         _handleFolderTap(_expandedFolderId!);
                       }
                     }
                   } else {
-                    // Server ne 200 OK bheja, lekin body mein error message hai.
                     throw Exception(
                         'Upload failed: ${body.isNotEmpty ? body : "Unknown server error"}');
                   }
                 } else {
-                  // Server ne non-200 status code bheja.
                   throw Exception(
                       'Upload failed. Server error: ${response.statusCode}');
                 }
               } catch (e) {
                 if (mounted) {
-                  // Error yahaan catch hoga aur user ko dikhaya jayega.
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('$e'),
@@ -376,7 +424,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                   );
                 }
               } finally {
-                if (mounted) { // mounted check yahan bhi zaroori hai
+                if (mounted) {
                   setDialogState(() {
                     isUploading = false;
                   });
@@ -538,7 +586,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                    final formattedDate = DateFormat('dd/MM/yyyy').format(now);
 
                    final body = {
-                     "MailFromId": 1000,
+                     "MailFromId": widget.userId,
                      "fid": _expandedFolderId ?? 0,
                      "projectid": widget.projectId,
                      "MailSub": emailSubject,
@@ -775,7 +823,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
             onPressed: _showSendEmailDialog,
             tooltip: 'Send Email',
           ),
-          // Show upload button only when a folder is expanded
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: _showUserLogsDrawer,
+            tooltip: 'User Logs',
+          ),
           if (_expandedFolderId != null)
             IconButton(
               icon: const Icon(Icons.upload_file_outlined),
@@ -952,4 +1004,91 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     );
   }
 }
+class UserActivityLog extends StatefulWidget {
+  final int userId;
+  const UserActivityLog({super.key, required this.userId});
 
+  @override
+  State<UserActivityLog> createState() => _UserActivityLogState();
+}
+
+class _UserActivityLogState extends State<UserActivityLog> {
+  late Future<List<FileLog>> _logsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _logsFuture = _fetchUserActivityLogs(widget.userId);
+  }
+
+  Future<List<FileLog>> _fetchUserActivityLogs(int userId) async {
+    final List<FileLog> userLogs = [];
+
+    final projectsResponse = await http.get(Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/bridge/ViewMember?id=$userId'));
+    if (projectsResponse.statusCode != 200) throw Exception('Failed to load projects');
+    
+    final responseData = json.decode(projectsResponse.body);
+    final Map<String, dynamic> memberData = responseData is String ? json.decode(responseData) : responseData;
+    final List<dynamic> projectsJson = memberData['objProjectList'] ?? [];
+    List<UserProject> projects = projectsJson.map((p) => UserProject.fromJson(p)).toList();
+
+    for (var project in projects) {
+      final filesResponse = await http.get(Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=${project.projectId}'));
+      if (filesResponse.statusCode == 200) {
+        final dynamic body = json.decode(filesResponse.body);
+        final List<dynamic> allFiles = body is String ? json.decode(body) : body;
+        
+        for (var fileJson in allFiles) {
+          FileModel file = FileModel.fromJson(fileJson);
+          final statusResponse = await http.get(Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}'));
+          
+          if (statusResponse.statusCode == 200) {
+            final statusData = json.decode(statusResponse.body);
+            if (statusData['status'] == true && statusData['currentPage'] != null) {
+              userLogs.add(FileLog(fileName: file.name, lastPage: statusData['currentPage']));
+            }
+          }
+        }
+      }
+    }
+    return userLogs;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<FileLog>>(
+      future: _logsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No file reading activity found.'));
+        }
+        final logs = snapshot.data!;
+        return ListView.builder(
+          shrinkWrap: true,
+          itemCount: logs.length,
+          itemBuilder: (context, index) {
+            final log = logs[index];
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text(log.fileName)), // File name wrap ho jayega
+                    Text('Page: ${log.lastPage}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}

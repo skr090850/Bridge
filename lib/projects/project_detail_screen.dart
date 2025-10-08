@@ -15,6 +15,7 @@ import 'model/folder_model.dart';
 import 'model/file_model.dart';
 import 'model/project_member_model.dart';
 
+import 'viewers/doc_viewer_screen_using_api.dart';
 import 'viewers/doc_viewer_screen.dart';
 import 'viewers/pdf_viewer_screen.dart';
 import 'viewers/epub_viewer_screen.dart';
