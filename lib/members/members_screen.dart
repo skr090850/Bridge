@@ -22,8 +22,15 @@ class _MembersScreenState extends State<MembersScreen> {
     final arguments =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
 
-    _userId = arguments?['userId'] ?? 1000;
+    // _userId = arguments?['userId'] ?? 1000;
+    // _membersFuture = _fetchMembers(_userId!);
+    if (arguments != null && arguments.containsKey('userId')) {
+    _userId = arguments['userId'];
     _membersFuture = _fetchMembers(_userId!);
+  } else {
+    _userId = null;
+    _membersFuture = Future.error('User ID not found. Please log in again.');
+  }
   }
 
   Future<List<Member>> _fetchMembers(int userId) async {
