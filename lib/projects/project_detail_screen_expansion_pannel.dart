@@ -1021,99 +1021,115 @@ class _UserActivityLogState extends State<UserActivityLog> {
     _logsFuture = _fetchUserActivityLogs(widget.userId);
   }
 
-Future<List<FileLog>> _fetchUserActivityLogs(int userId) async {
-  final List<FileLog> userLogs = [];
-
-  try {
-    final projectsResponse = await http.get(Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/ViewMember?id=$userId'));
-
-    if (projectsResponse.statusCode != 200) {
-      throw Exception('Failed to load projects for user');
-    }
-
-    dynamic responseData = json.decode(projectsResponse.body);
-    if (responseData is String) {
-      responseData = json.decode(responseData);
-    }
-
-    final Map<String, dynamic> memberData = responseData;
-    final List<dynamic> projectsJson = memberData['ProjectsList'] ?? [];
-
-    if (projectsJson.isEmpty) {
-      return [];
-    }
-
-    List<UserProject> projects =
-        projectsJson.map((p) => UserProject.fromJson(p)).toList();
-
-    for (var project in projects) {
-      if (project.projectId == 0) {
-        continue;
+  Future<List<FileLog>> _fetchUserActivityLogs(int userId) async {
+    final List<FileLog> userLogs = [];
+    try {
+      final projectsResponse = await http.get(Uri.parse(
+          'http://183.82.115.221/Bridge/BridgeApi/api/bridge/ViewMember?id=$userId'));
+      if (projectsResponse.statusCode != 200) {
+        throw Exception('Failed to load projects');
       }
+      dynamic responseData = json.decode(projectsResponse.body);
+      if (responseData is String) {
+        responseData = json.decode(responseData);
+      }
+      final Map<String, dynamic> memberData = responseData;
+      final List<dynamic> projectsJson = memberData['ProjectsList'] ?? [];
+      if (projectsJson.isEmpty) return [];
 
-      final filesResponse = await http.get(Uri.parse(
-          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=${project.projectId}'));
+      List<UserProject> projects =
+          projectsJson.map((p) => UserProject.fromJson(p)).toList();
 
-      if (filesResponse.statusCode == 200) {
-        final List<dynamic> allFiles = json.decode(filesResponse.body);
-
-        for (var fileJson in allFiles) {
-          FileModel file = FileModel.fromJson(fileJson);
-          final statusResponse = await http.get(Uri.parse(
-              'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}'));
-
-          if (statusResponse.statusCode == 200) {
-            final statusData = json.decode(statusResponse.body);
-            if (statusData['status'] == true && statusData['currentPage'] != null) {
-              userLogs.add(FileLog(
-                  fileName: file.name, lastPage: statusData['currentPage']));
+      for (var project in projects) {
+        if (project.projectId == 0) continue;
+        final filesResponse = await http.get(Uri.parse(
+            'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=${project.projectId}'));
+        if (filesResponse.statusCode == 200) {
+          final List<dynamic> allFiles = json.decode(filesResponse.body);
+          for (var fileJson in allFiles) {
+            FileModel file = FileModel.fromJson(fileJson);
+            final statusResponse = await http.get(Uri.parse(
+                'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}'));
+            if (statusResponse.statusCode == 200) {
+              final statusData = json.decode(statusResponse.body);
+              if (statusData['status'] == true &&
+                  statusData['currentPage'] != null) {
+                userLogs.add(FileLog(
+                    fileName: file.name, lastPage: statusData['currentPage']));
+              }
             }
           }
         }
       }
+      return userLogs;
+    } catch (e) {
+      throw Exception('Error in _fetchUserActivityLogs: $e');
     }
-
-    return userLogs;
-
-  } catch (e) {
-    throw Exception('Error fetching user activity logs: $e');
   }
-}
 
   @override
   Widget build(BuildContext context) {
+    const double smallContainerHeight = 120.0;
+    final double maxContainerHeight = MediaQuery.of(context).size.height * 0.5;
+
     return FutureBuilder<List<FileLog>>(
       future: _logsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const SizedBox(
+            height: smallContainerHeight,
+            child: Center(child: CircularProgressIndicator()),
+          );
         }
+
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('No file reading activity found.'));
-        }
-        final logs = snapshot.data!;
-        return ListView.builder(
-          shrinkWrap: true,
-          itemCount: logs.length,
-          itemBuilder: (context, index) {
-            final log = logs[index];
-            return Card(
+          return SizedBox(
+            height: smallContainerHeight,
+            child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: Text(log.fileName)),
-                    Text('Page: ${log.lastPage}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ],
-                ),
+                child: Text('Error: ${snapshot.error}', textAlign: TextAlign.center),
               ),
-            );
-          },
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox(
+            height: smallContainerHeight,
+            child: Center(child: Text('No file reading activity found.')),
+          );
+        }
+
+        final logs = snapshot.data!;
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: maxContainerHeight, 
+          ),
+          child: ListView.builder(
+            shrinkWrap: true, 
+            itemCount: logs.length,
+            itemBuilder: (context, index) {
+              final log = logs[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                          child: Text(log.fileName,
+                              overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 16),
+                      Text('Page: ${log.lastPage}',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );
