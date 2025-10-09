@@ -67,7 +67,7 @@ class Member {
 
     return Member(
       id: json['id'] ?? 0,
-      displayname: json['displayname'] ?? 'N/A',
+      displayname: json['displayname'] ?? json['loginname'] ?? 'N/A',
       loginname: json['loginname'] ?? 'N/A',
       organization: json['organization'] ?? 'N/A',
       position: json['position'] ?? 'No designation',

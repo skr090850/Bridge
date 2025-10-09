@@ -291,9 +291,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 var response = await request.send();
                 final responseBody = await response.stream.bytesToString();
 
-                debugPrint('Response Status Code: ${response.statusCode}');
-                debugPrint('Response Body: $responseBody');
-                debugPrint('--- UPLOAD COMPLETE ---');
+                // debugPrint('Response Status Code: ${response.statusCode}');
+                // debugPrint('Response Body: $responseBody');
+                // debugPrint('--- UPLOAD COMPLETE ---');
 
                 if (response.statusCode == 200) {
                   final body = responseBody.trim();

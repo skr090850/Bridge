@@ -14,7 +14,7 @@ import 'model/project_model.dart';
 import 'model/folder_model.dart';
 import 'model/file_model.dart';
 import 'model/project_member_model.dart';
-import 'model/user_project_model.dart';
+import '../members/user_project_model.dart';
 
 import 'viewers/doc_viewer_screen_using_api.dart';
 import 'viewers/doc_viewer_screen.dart';
@@ -1021,38 +1021,65 @@ class _UserActivityLogState extends State<UserActivityLog> {
     _logsFuture = _fetchUserActivityLogs(widget.userId);
   }
 
-  Future<List<FileLog>> _fetchUserActivityLogs(int userId) async {
-    final List<FileLog> userLogs = [];
+Future<List<FileLog>> _fetchUserActivityLogs(int userId) async {
+  final List<FileLog> userLogs = [];
 
-    final projectsResponse = await http.get(Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/bridge/ViewMember?id=$userId'));
-    if (projectsResponse.statusCode != 200) throw Exception('Failed to load projects');
-    
-    final responseData = json.decode(projectsResponse.body);
-    final Map<String, dynamic> memberData = responseData is String ? json.decode(responseData) : responseData;
-    final List<dynamic> projectsJson = memberData['objProjectList'] ?? [];
-    List<UserProject> projects = projectsJson.map((p) => UserProject.fromJson(p)).toList();
+  try {
+    final projectsResponse = await http.get(Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/ViewMember?id=$userId'));
+
+    if (projectsResponse.statusCode != 200) {
+      throw Exception('Failed to load projects for user');
+    }
+
+    dynamic responseData = json.decode(projectsResponse.body);
+    if (responseData is String) {
+      responseData = json.decode(responseData);
+    }
+
+    final Map<String, dynamic> memberData = responseData;
+    final List<dynamic> projectsJson = memberData['ProjectsList'] ?? [];
+
+    if (projectsJson.isEmpty) {
+      return [];
+    }
+
+    List<UserProject> projects =
+        projectsJson.map((p) => UserProject.fromJson(p)).toList();
 
     for (var project in projects) {
-      final filesResponse = await http.get(Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=${project.projectId}'));
+      if (project.projectId == 0) {
+        continue;
+      }
+
+      final filesResponse = await http.get(Uri.parse(
+          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=${project.projectId}'));
+
       if (filesResponse.statusCode == 200) {
-        final dynamic body = json.decode(filesResponse.body);
-        final List<dynamic> allFiles = body is String ? json.decode(body) : body;
-        
+        final List<dynamic> allFiles = json.decode(filesResponse.body);
+
         for (var fileJson in allFiles) {
           FileModel file = FileModel.fromJson(fileJson);
-          final statusResponse = await http.get(Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}'));
-          
+          final statusResponse = await http.get(Uri.parse(
+              'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}'));
+
           if (statusResponse.statusCode == 200) {
             final statusData = json.decode(statusResponse.body);
             if (statusData['status'] == true && statusData['currentPage'] != null) {
-              userLogs.add(FileLog(fileName: file.name, lastPage: statusData['currentPage']));
+              userLogs.add(FileLog(
+                  fileName: file.name, lastPage: statusData['currentPage']));
             }
           }
         }
       }
     }
+
     return userLogs;
+
+  } catch (e) {
+    throw Exception('Error fetching user activity logs: $e');
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1080,7 +1107,7 @@ class _UserActivityLogState extends State<UserActivityLog> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(child: Text(log.fileName)), // File name wrap ho jayega
+                    Expanded(child: Text(log.fileName)),
                     Text('Page: ${log.lastPage}', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ),

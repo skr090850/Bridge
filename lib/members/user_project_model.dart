@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 class UserProject {
-  final int projectId; // Project ID ke liye naya field
+  final int projectId;
   final String projectName;
   final String role;
   final String createdDate;
@@ -22,11 +22,10 @@ class UserProject {
     }
 
     return UserProject(
-      projectId: json['ProjectId'] ?? 0, // API se ProjectId parse kiya gaya hai
+      projectId: json['ProjectId'] ?? 0,
       projectName: json['projectname'] ?? 'No Project Name',
       role: json['Role'] ?? 'Not Specified',
       createdDate: date,
     );
   }
 }
-
