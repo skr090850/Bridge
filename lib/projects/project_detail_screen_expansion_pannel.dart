@@ -26,12 +26,19 @@ import 'viewers/xlsx_viewer_screen.dart';
 import 'viewers/epub_viewer_screen_copy_withzoom.dart';
 import 'viewers/doc_file_reader/word_doc_viewer_screen.dart';
 import 'viewers/ppt_file_reader/viewer_screen.dart';
+
 // import 'viewers/epub_viewer_withoutZoom.dart';
 class FileLog {
   final String fileName;
   final int lastPage;
-  FileLog({required this.fileName, required this.lastPage});
+  final String folderName;
+  FileLog({
+    required this.fileName,
+    required this.lastPage,
+    required this.folderName,
+  });
 }
+
 class MultipartRequestWithProgress extends http.MultipartRequest {
   final void Function(int bytes, int totalBytes) onProgress;
 
@@ -71,14 +78,15 @@ class ProjectDetailScreenExpansionPannel extends StatefulWidget {
     required this.projectId,
     required this.projectTitle,
     required this.userId,
-    
   });
 
   @override
-  State<ProjectDetailScreenExpansionPannel> createState() => _ProjectDetailScreenState();
+  State<ProjectDetailScreenExpansionPannel> createState() =>
+      _ProjectDetailScreenState();
 }
 
-class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel> {
+class _ProjectDetailScreenState
+    extends State<ProjectDetailScreenExpansionPannel> {
   late Future<List<Folder>> _foldersFuture;
 
   int? _expandedFolderId;
@@ -94,38 +102,94 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     super.initState();
     _foldersFuture = _fetchFolders(widget.projectId);
   }
-  void _showUserLogsDrawer() {
-    showModalBottomSheet(
-        context: context,
-        builder: (context) {
-          return FutureBuilder<List<ProjectMember>>(
-            future: _fetchProjectMembers(widget.projectId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-              final members = snapshot.data!;
-              return ListView.builder(
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  final member = members[index];
-                  return ListTile(
-                    leading: CircleAvatar(child: Text(member.name[0].toUpperCase())),
-                    title: Text(member.name),
-                    onTap: () {
-                      Navigator.pop(context); // Drawer band karein
-                      _showUserActivityPopup(member.id, member.name);
+
+void _showUserLogsDrawer() {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (context) {
+      final List<Color> avatarColors = [
+        Colors.blue, Colors.green, Colors.red, Colors.orange, 
+        Colors.purple, Colors.teal, Colors.pink, Colors.indigo
+      ];
+
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Select a Member to View Logs',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+
+            Flexible(
+              child: FutureBuilder<List<ProjectMember>>(
+                future: _fetchProjectMembers(widget.projectId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Error: ${snapshot.error}'));
+                  }
+                  final members = snapshot.data!;
+                  
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: members.length,
+                    itemBuilder: (context, index) {
+                      final member = members[index];
+                      final color = avatarColors[member.name.hashCode % avatarColors.length];
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        leading: CircleAvatar(
+                          backgroundColor: color.withOpacity(0.15),
+                          foregroundColor: color,
+                          child: const Icon(
+                            Icons.person,
+                            size: 24,
+                          ),
+                          // child: Text(
+                          //   member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
+                          //   style: const TextStyle(fontWeight: FontWeight.bold),
+                          // ),
+                        ),
+                        title: Text(member.name),
+                        trailing: Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey.shade400),
+                        onTap: () {
+                          Navigator.pop(context); 
+                          _showUserActivityPopup(member.id, member.name);
+                        },
+                      );
+                    },
+                    separatorBuilder: (context, index) {
+                      return const Divider(height: 1);
                     },
                   );
                 },
-              );
-            },
-          );
-        });
-  }
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
   void _showUserActivityPopup(int memberId, String memberName) {
     showDialog(
       context: context,
@@ -134,13 +198,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
           title: Text("Activity for $memberName"),
           content: SizedBox(
             width: double.maxFinite,
-            child: UserActivityLog(userId: memberId),
+            child: UserActivityLog(
+              userId: memberId,
+              projectId: widget.projectId,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
-            )
+            ),
           ],
         );
       },
@@ -173,8 +240,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);
       final List<dynamic> allFiles = body is String ? json.decode(body) : body;
-      final List<dynamic> filtered =
-          allFiles.where((file) => file['fid'] == folderId).toList();
+      final List<dynamic> filtered = allFiles
+          .where((file) => file['fid'] == folderId)
+          .toList();
       return filtered.map((json) => FileModel.fromJson(json)).toList();
     } else {
       throw Exception('Failed to load files');
@@ -182,8 +250,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
   }
 
   Future<List<ProjectMember>> _fetchProjectMembers(int projectId) async {
-    final response = await http.get(Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/template/getmemberAssainersList?id=$projectId'));
+    final response = await http.get(
+      Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/template/getmemberAssainersList?id=$projectId',
+      ),
+    );
     if (response.statusCode == 200) {
       final List<dynamic> data = json.decode(response.body);
       return data.map((json) => ProjectMember.fromJson(json)).toList();
@@ -191,7 +262,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       throw Exception('Failed to load project members');
     }
   }
-
 
   Future<void> _handleFolderTap(int folderId) async {
     if (_expandedFolderId == folderId) {
@@ -221,13 +291,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
         setState(() {
           _isLoadingFiles = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading files: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading files: $e')));
       }
     }
   }
-
 
   Future<void> _handleFileTap(int fileId, String fileName) async {
     setState(() {
@@ -252,8 +321,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       _openFile(filePath, fileName, fileId);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error handling file: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error handling file: $e')));
       }
     } finally {
       if (mounted) {
@@ -280,7 +350,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
         context,
         MaterialPageRoute(
           builder: (_) =>
-              DocViewerScreen(fileUrl: viewerUrl, fileName: fileName,),
+              DocViewerScreen(fileUrl: viewerUrl, fileName: fileName),
         ),
       );
       return;
@@ -288,19 +358,39 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
 
     Widget? viewer;
     if (extension == 'pdf') {
-      viewer = PdfViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+      viewer = PdfViewerScreen(
+        filePath: filePath,
+        fileName: fileName,
+        userId: widget.userId,
+        fileId: fileId,
+      );
     } else if (extension == 'epub') {
-      viewer = EpubViewerScreenCopy(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+      viewer = EpubViewerScreenCopy(
+        filePath: filePath,
+        fileName: fileName,
+        userId: widget.userId,
+        fileId: fileId,
+      );
     } else if (extension == 'txt') {
-      viewer = TextViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+      viewer = TextViewerScreen(
+        filePath: filePath,
+        fileName: fileName,
+        userId: widget.userId,
+        fileId: fileId,
+      );
     } else if (imageExtensions.contains(extension)) {
       viewer = ImageViewerScreen(filePath: filePath, fileName: fileName);
     } else if (extension == 'xlsx') {
-      viewer = XlsxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
-    // } else if (extension == 'docx' || extension == 'doc') {
-    //   viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
-    // } else if (extension == 'pptx' || extension == 'ppt') {
-    //   viewer = PptxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+      viewer = XlsxViewerScreen(
+        filePath: filePath,
+        fileName: fileName,
+        userId: widget.userId,
+        fileId: fileId,
+      );
+      // } else if (extension == 'docx' || extension == 'doc') {
+      //   viewer = WordDocViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
+      // } else if (extension == 'pptx' || extension == 'ppt') {
+      //   viewer = PptxViewerScreen(filePath: filePath, fileName: fileName, userId: widget.userId,fileId: fileId,);
     }
 
     if (viewer != null) {
@@ -325,7 +415,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
       );
       return;
     }
-    
+
     List<File> selectedFiles = [];
     bool isUploading = false;
     double uploadProgress = 0.0;
@@ -342,8 +432,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
               );
               if (result != null) {
                 setDialogState(() {
-                  selectedFiles =
-                      result.paths.map((path) => File(path!)).toList();
+                  selectedFiles = result.paths
+                      .map((path) => File(path!))
+                      .toList();
                 });
               }
             }
@@ -408,19 +499,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                     }
                   } else {
                     throw Exception(
-                        'Upload failed: ${body.isNotEmpty ? body : "Unknown server error"}');
+                      'Upload failed: ${body.isNotEmpty ? body : "Unknown server error"}',
+                    );
                   }
                 } else {
                   throw Exception(
-                      'Upload failed. Server error: ${response.statusCode}');
+                    'Upload failed. Server error: ${response.statusCode}',
+                  );
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('$e'),
-                      backgroundColor: Colors.red,
-                    ),
+                    SnackBar(content: Text('$e'), backgroundColor: Colors.red),
                   );
                 }
               } finally {
@@ -434,14 +524,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
 
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(16),
+              ),
               titlePadding: const EdgeInsets.fromLTRB(24, 24, 16, 0),
               contentPadding: const EdgeInsets.all(24),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Upload File',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Upload File',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -452,8 +545,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
               ),
               content: SizedBox(
                 // constraints: BoxConstraints(
-                  width: MediaQuery.of(context).size.width * 0.9,
-                  // minWidth: 300,
+                width: MediaQuery.of(context).size.width * 0.9,
+                // minWidth: 300,
                 // ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -483,19 +576,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                               : SingleChildScrollView(
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0),
+                                      vertical: 8.0,
+                                    ),
                                     child: Column(
                                       children: selectedFiles
                                           .map(
                                             (file) => ListTile(
                                               dense: true,
                                               leading: const Icon(
-                                                  Icons.insert_drive_file,
-                                                  size: 20),
+                                                Icons.insert_drive_file,
+                                                size: 20,
+                                              ),
                                               title: Text(
                                                 file.path.split('/').last,
                                                 style: const TextStyle(
-                                                    fontSize: 13),
+                                                  fontSize: 13,
+                                                ),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
@@ -519,19 +615,23 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                    '${(uploadProgress * 100).toStringAsFixed(0)}% Uploaded'),
+                                  '${(uploadProgress * 100).toStringAsFixed(0)}% Uploaded',
+                                ),
                               ],
                             )
                           : ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                               ),
                               onPressed: selectedFiles.isEmpty || isUploading
                                   ? null
                                   : uploadFiles,
-                              child: const Text('Upload',
-                                  style: TextStyle(fontSize: 16)),
+                              child: const Text(
+                                'Upload',
+                                style: TextStyle(fontSize: 16),
+                              ),
                             ),
                     ),
                   ],
@@ -545,222 +645,296 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
   }
 
   void _showSendEmailDialog() {
-     final textTheme = Theme.of(context).textTheme;
-     final Future<List<ProjectMember>> membersFuture = _fetchProjectMembers(widget.projectId);
-     final mailContentController = TextEditingController();
-     List<ProjectMember> membersList = [];
-     bool selectAll = false;
-     bool isSending = false;
-     
-     // Find the currently selected folder's name
-     String emailSubject = widget.projectTitle; // Default subject
-     if (_expandedFolderId != null) {
-       final selectedFolder = _folderList.firstWhere((f) => f.id == _expandedFolderId, orElse: () => Folder(id: 0, name: '', description: ''));
-       if (selectedFolder.id != 0) {
-         emailSubject = selectedFolder.name;
-       }
-     }
+    final textTheme = Theme.of(context).textTheme;
+    final Future<List<ProjectMember>> membersFuture = _fetchProjectMembers(
+      widget.projectId,
+    );
+    final mailContentController = TextEditingController();
+    List<ProjectMember> membersList = [];
+    bool selectAll = false;
+    bool isSending = false;
 
-     showDialog(
-         context: context,
-         builder: (context) {
-           return StatefulBuilder(
-             builder: (context, setDialogState) {
-               
-               Future<void> sendEmail() async {
-                 final selectedIds = membersList.where((m) => m.isSelected).map((m) => m.id.toString()).toList();
-                 
-                 if (selectedIds.isEmpty) {
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one member.'), backgroundColor: Colors.orange));
-                   return;
-                 }
-                 if (mailContentController.text.trim().isEmpty) {
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mail content cannot be empty.'), backgroundColor: Colors.orange));
-                   return;
-                 }
+    String emailSubject = widget.projectTitle;
+    if (_expandedFolderId != null) {
+      final selectedFolder = _folderList.firstWhere(
+        (f) => f.id == _expandedFolderId,
+        orElse: () => Folder(id: 0, name: '', description: ''),
+      );
+      if (selectedFolder.id != 0) {
+        emailSubject = selectedFolder.name;
+      }
+    }
 
-                 setDialogState(() => isSending = true);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> sendEmail() async {
+              final selectedIds = membersList
+                  .where((m) => m.isSelected)
+                  .map((m) => m.id.toString())
+                  .toList();
 
-                 try {
-                   final now = DateTime.now();
-                   final formattedDate = DateFormat('dd/MM/yyyy').format(now);
+              if (selectedIds.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please select at least one member.'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
+              if (mailContentController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Mail content cannot be empty.'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
 
-                   final body = {
-                     "MailFromId": widget.userId,
-                     "fid": _expandedFolderId ?? 0,
-                     "projectid": widget.projectId,
-                     "MailSub": emailSubject,
-                     "MailToids": selectedIds.join(','),
-                     "MailMessage": mailContentController.text.trim(),
-                     "MailPerson": null,
-                     "createddate": formattedDate,
-                     "processdate": formattedDate,
-                     "Type": "Folders",
-                     "MailEventId": 0,
-                     "processid": null,
-                     "status": 0
-                   };
+              setDialogState(() => isSending = true);
 
-                   final response = await http.post(
-                     Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/template/AddMailalerts'),
-                     headers: {'Content-Type': 'application/json'},
-                     body: json.encode(body),
-                   );
+              try {
+                final now = DateTime.now();
+                final formattedDate = DateFormat('dd/MM/yyyy').format(now);
 
-                   if (response.statusCode == 200) {
-                     final responseBody = json.decode(response.body);
-                     if (responseBody == true) {
-                       if (mounted) {
-                         Navigator.of(context).pop();
-                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email sent successfully!'), backgroundColor: Colors.green));
-                       }
-                     } else {
-                       throw Exception('Server returned false.');
-                     }
-                   } else {
-                     throw Exception('Server error: ${response.statusCode}');
-                   }
-                 } catch (e) {
-                   if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send email: $e'), backgroundColor: Colors.red));
-                 } finally {
-                   if (mounted) setDialogState(() => isSending = false);
-                 }
-               }
-               
-               return AlertDialog(
-                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                 titlePadding: const EdgeInsets.fromLTRB(24, 24, 16, 0),
-                 contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                 title: Row(
-                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                   children: [
-                     const Text('Send Email', style: TextStyle(fontWeight: FontWeight.bold)),
-                     IconButton(
-                       padding: EdgeInsets.zero,
-                       constraints: const BoxConstraints(),
-                       icon: const Icon(Icons.close),
-                       onPressed: () => Navigator.of(context).pop(),
-                     ),
-                   ],
-                 ),
-                 content: SizedBox(
-                   width: MediaQuery.of(context).size.width * 0.9,
-                   child: SingleChildScrollView(
-                     child: Column(
-                       mainAxisSize: MainAxisSize.min,
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         DottedBorder(
-                           borderType: BorderType.RRect,
-                           radius: const Radius.circular(8),
-                           color: Colors.grey[400]!,
-                           strokeWidth: 1.5,
-                           dashPattern: const [6, 5],
-                           child: Container(
-                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                             width: double.infinity,
-                             child: Text(
-                               emailSubject,
-                               style: TextStyle(color: Colors.grey[700])
-                             ),
-                           ),
-                         ),
-                         const SizedBox(height: 16),
-                         FutureBuilder<List<ProjectMember>>(
-                           future: membersFuture,
-                           builder: (context, snapshot) {
-                             if (snapshot.connectionState == ConnectionState.waiting) {
-                               return const Center(child: Padding(
-                                 padding: EdgeInsets.all(8.0),
-                                 child: CircularProgressIndicator(),
-                               ));
-                             }
-                             if (snapshot.hasError) {
-                               return Center(child: Text('Error: ${snapshot.error}'));
-                             }
-                             if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                               return const Center(child: Text('No members found.'));
-                             }
-                             
-                             membersList = snapshot.data!;
+                final body = {
+                  "MailFromId": widget.userId,
+                  "fid": _expandedFolderId ?? 0,
+                  "projectid": widget.projectId,
+                  "MailSub": emailSubject,
+                  "MailToids": selectedIds.join(','),
+                  "MailMessage": mailContentController.text.trim(),
+                  "MailPerson": null,
+                  "createddate": formattedDate,
+                  "processdate": formattedDate,
+                  "Type": "Folders",
+                  "MailEventId": 0,
+                  "processid": null,
+                  "status": 0,
+                };
 
-                             return Column(
-                               mainAxisSize: MainAxisSize.min,
-                               children: [
-                                 CheckboxListTile(
-                                   title: Text('Select All Members',style: Theme.of(context).textTheme.labelLarge,),
-                                   value: selectAll,
-                                   onChanged: (bool? value) {
-                                     setDialogState(() {
-                                       selectAll = value!;
-                                       for (var member in membersList) {
-                                         member.isSelected = selectAll;
-                                       }
-                                     });
-                                   },
-                                   visualDensity: const VisualDensity(vertical: -4),
-                                   controlAffinity: ListTileControlAffinity.leading,
-                                   contentPadding: EdgeInsets.zero,
-                                 ),
-                                 const Divider(),
-                                 ListView.builder(
-                                   shrinkWrap: true,
-                                   physics: const NeverScrollableScrollPhysics(),
-                                   itemCount: membersList.length,
-                                   itemBuilder: (context, index) {
-                                     final member = membersList[index];
-                                     return CheckboxListTile(
-                                       title: Text(member.name,style: Theme.of(context).textTheme.labelLarge,),
-                                       value: member.isSelected,
-                                       onChanged: (bool? value) {
-                                         setDialogState(() {
-                                           member.isSelected = value!;
-                                         });
-                                       },
-                                       visualDensity: const VisualDensity(vertical: -4),
-                                       controlAffinity: ListTileControlAffinity.leading,
-                                       contentPadding: EdgeInsets.zero,
-                                     );
-                                   },
-                                 ),
-                               ],
-                             );
-                           },
-                         ),
-                         const SizedBox(height: 16),
-                         TextField(
-                           controller: mailContentController,
-                           style: textTheme.labelLarge,
-                           maxLines: 4,
-                           decoration: InputDecoration(
-                             hintText: 'Mail content',hintStyle: Theme.of( context).textTheme.labelLarge?.copyWith(color: Colors.grey[600]),
-                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                           ),
-                         ),
-                       ],
-                     ),
-                   ),
-                 ),
-                 actions: [
-                   Padding(
-                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                     child: SizedBox(
-                       width: double.infinity,
-                       child: ElevatedButton(
-                         style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                         onPressed: isSending ? null : sendEmail,
-                         child: isSending
-                             ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                             : const Text('Send', style: TextStyle(fontSize: 16)),
-                       ),
-                     ),
-                   ),
-                 ],
-               );
-             },
-           );
-         },
-       );
+                final response = await http.post(
+                  Uri.parse(
+                    'http://183.82.115.221/Bridge/BridgeApi/api/template/AddMailalerts',
+                  ),
+                  headers: {'Content-Type': 'application/json'},
+                  body: json.encode(body),
+                );
+
+                if (response.statusCode == 200) {
+                  final responseBody = json.decode(response.body);
+                  if (responseBody == true) {
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Email sent successfully!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    throw Exception('Server returned false.');
+                  }
+                } else {
+                  throw Exception('Server error: ${response.statusCode}');
+                }
+              } catch (e) {
+                if (mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to send email: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+              } finally {
+                if (mounted) setDialogState(() => isSending = false);
+              }
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 16, 0),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 16,
+              ),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Send Email',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DottedBorder(
+                        borderType: BorderType.RRect,
+                        radius: const Radius.circular(8),
+                        color: Colors.grey[400]!,
+                        strokeWidth: 1.5,
+                        dashPattern: const [6, 5],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 16,
+                          ),
+                          width: double.infinity,
+                          child: Text(
+                            emailSubject,
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FutureBuilder<List<ProjectMember>>(
+                        future: membersFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text('Error: ${snapshot.error}'),
+                            );
+                          }
+                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                            return const Center(
+                              child: Text('No members found.'),
+                            );
+                          }
+
+                          membersList = snapshot.data!;
+
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CheckboxListTile(
+                                title: Text(
+                                  'Select All Members',
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                                value: selectAll,
+                                onChanged: (bool? value) {
+                                  setDialogState(() {
+                                    selectAll = value!;
+                                    for (var member in membersList) {
+                                      member.isSelected = selectAll;
+                                    }
+                                  });
+                                },
+                                visualDensity: const VisualDensity(
+                                  vertical: -4,
+                                ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              const Divider(),
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: membersList.length,
+                                itemBuilder: (context, index) {
+                                  final member = membersList[index];
+                                  return CheckboxListTile(
+                                    title: Text(
+                                      member.name,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelLarge,
+                                    ),
+                                    value: member.isSelected,
+                                    onChanged: (bool? value) {
+                                      setDialogState(() {
+                                        member.isSelected = value!;
+                                      });
+                                    },
+                                    visualDensity: const VisualDensity(
+                                      vertical: -4,
+                                    ),
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    contentPadding: EdgeInsets.zero,
+                                  );
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: mailContentController,
+                        style: textTheme.labelLarge,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          hintText: 'Mail content',
+                          hintStyle: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: Colors.grey[600]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: isSending ? null : sendEmail,
+                      child: isSending
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 3,
+                              ),
+                            )
+                          : const Text('Send', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   // --- Helper Widgets ---
@@ -874,7 +1048,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
                   ),
                   title: Text(
                     folder.name,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
                     // style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                   trailing: Icon(
@@ -927,19 +1103,28 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
               children: [
                 const SizedBox(width: 40), // For icon alignment
                 const Expanded(
-                    flex: 5,
-                    child: Text('Name',
-                        style: TextStyle(fontWeight: FontWeight.bold))),
+                  flex: 5,
+                  child: Text(
+                    'Name',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
                 const Expanded(
-                    flex: 2,
-                    child: Text('Size',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.right)),
+                  flex: 2,
+                  child: Text(
+                    'Size',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
                 const Expanded(
-                    flex: 3,
-                    child: Text('Date',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.right)),
+                  flex: 3,
+                  child: Text(
+                    'Date',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
               ],
             ),
           ),
@@ -951,13 +1136,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     );
   }
 
-  /// Builds a single row widget for a file.
   Widget _buildFileRow(FileModel file) {
     final isCurrentlyDownloading =
         _isDownloading && _downloadingFileName == file.name;
 
     return InkWell(
-      onTap: isCurrentlyDownloading ? null : () => _handleFileTap(file.id, file.name),
+      onTap: isCurrentlyDownloading
+          ? null
+          : () => _handleFileTap(file.id, file.name),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Row(
@@ -1004,9 +1190,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreenExpansionPannel
     );
   }
 }
+
 class UserActivityLog extends StatefulWidget {
   final int userId;
-  const UserActivityLog({super.key, required this.userId});
+  final int projectId;
+  const UserActivityLog({
+    super.key,
+    required this.userId,
+    required this.projectId,
+  });
 
   @override
   State<UserActivityLog> createState() => _UserActivityLogState();
@@ -1018,59 +1210,80 @@ class _UserActivityLogState extends State<UserActivityLog> {
   @override
   void initState() {
     super.initState();
-    _logsFuture = _fetchUserActivityLogs(widget.userId);
+    _logsFuture = _fetchUserActivityLogs(widget.userId, widget.projectId);
   }
 
-  Future<List<FileLog>> _fetchUserActivityLogs(int userId) async {
+  Future<List<FileLog>> _fetchUserActivityLogs(
+    int userId,
+    int projectId,
+  ) async {
     final List<FileLog> userLogs = [];
-    try {
-      final projectsResponse = await http.get(Uri.parse(
-          'http://183.82.115.221/Bridge/BridgeApi/api/bridge/ViewMember?id=$userId'));
-      if (projectsResponse.statusCode != 200) {
-        throw Exception('Failed to load projects');
-      }
-      dynamic responseData = json.decode(projectsResponse.body);
-      if (responseData is String) {
-        responseData = json.decode(responseData);
-      }
-      final Map<String, dynamic> memberData = responseData;
-      final List<dynamic> projectsJson = memberData['ProjectsList'] ?? [];
-      if (projectsJson.isEmpty) return [];
 
-      List<UserProject> projects =
-          projectsJson.map((p) => UserProject.fromJson(p)).toList();
+    // 1. Sirf current project ke folders fetch karein
+    final foldersResponse = await http.get(
+      Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId',
+      ),
+    );
+    if (foldersResponse.statusCode != 200)
+      throw Exception('Failed to load folders');
 
-      for (var project in projects) {
-        if (project.projectId == 0) continue;
-        final filesResponse = await http.get(Uri.parse(
-            'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=${project.projectId}'));
-        if (filesResponse.statusCode == 200) {
-          final List<dynamic> allFiles = json.decode(filesResponse.body);
-          for (var fileJson in allFiles) {
-            FileModel file = FileModel.fromJson(fileJson);
-            final statusResponse = await http.get(Uri.parse(
-                'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}'));
-            if (statusResponse.statusCode == 200) {
-              final statusData = json.decode(statusResponse.body);
-              if (statusData['status'] == true &&
-                  statusData['currentPage'] != null) {
-                userLogs.add(FileLog(
-                    fileName: file.name, lastPage: statusData['currentPage']));
-              }
-            }
-          }
+    final dynamic foldersBody = json.decode(foldersResponse.body);
+    final List<dynamic> foldersData = foldersBody is String
+        ? json.decode(foldersBody)
+        : foldersBody;
+    final List<Folder> folders = foldersData
+        .map((json) => Folder.fromJson(json))
+        .toList();
+
+    // 2. Sirf current project ki files fetch karein
+    final filesResponse = await http.get(
+      Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=$projectId',
+      ),
+    );
+    if (filesResponse.statusCode != 200)
+      throw Exception('Failed to load files');
+
+    final List<dynamic> allFiles = json.decode(filesResponse.body);
+
+    // 3. Har file ka status check karein aur folder ka naam pata karein
+    for (var fileJson in allFiles) {
+      FileModel file = FileModel.fromJson(fileJson);
+      final statusResponse = await http.get(
+        Uri.parse(
+          'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}',
+        ),
+      );
+
+      if (statusResponse.statusCode == 200) {
+        final statusData = json.decode(statusResponse.body);
+        if (statusData['status'] == true && statusData['currentPage'] != null) {
+          // Folder ka naam dhoondhein
+          final folder = folders.firstWhere(
+            (f) => f.id == file.folderId,
+            orElse: () =>
+                Folder(id: 0, name: 'Unknown Folder', description: ''),
+          );
+
+          userLogs.add(
+            FileLog(
+              fileName: file.name,
+              lastPage: statusData['currentPage'],
+              folderName: folder.name,
+            ),
+          );
         }
       }
-      return userLogs;
-    } catch (e) {
-      throw Exception('Error in _fetchUserActivityLogs: $e');
     }
+    return userLogs;
   }
 
   @override
   Widget build(BuildContext context) {
     const double smallContainerHeight = 120.0;
     final double maxContainerHeight = MediaQuery.of(context).size.height * 0.5;
+    final textTheme = Theme.of(context).textTheme;
 
     return FutureBuilder<List<FileLog>>(
       future: _logsFuture,
@@ -1088,7 +1301,10 @@ class _UserActivityLogState extends State<UserActivityLog> {
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Text('Error: ${snapshot.error}', textAlign: TextAlign.center),
+                child: Text(
+                  'Error: ${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           );
@@ -1103,11 +1319,9 @@ class _UserActivityLogState extends State<UserActivityLog> {
 
         final logs = snapshot.data!;
         return Container(
-          constraints: BoxConstraints(
-            maxHeight: maxContainerHeight, 
-          ),
+          constraints: BoxConstraints(maxHeight: maxContainerHeight),
           child: ListView.builder(
-            shrinkWrap: true, 
+            shrinkWrap: true,
             itemCount: logs.length,
             itemBuilder: (context, index) {
               final log = logs[index];
@@ -1116,14 +1330,29 @@ class _UserActivityLogState extends State<UserActivityLog> {
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                          child: Text(log.fileName,
-                              overflow: TextOverflow.ellipsis)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              log.fileName,
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Colors.black,fontWeight: FontWeight.bold)
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              log.folderName,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(width: 16),
                       Text('Page: ${log.lastPage}',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      style: Theme.of(context).textTheme.labelMedium
+                      ),
                     ],
                   ),
                 ),

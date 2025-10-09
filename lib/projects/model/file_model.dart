@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 class FileModel {
   final int id;
+  final int folderId;
   final String name;
   final String type;
   final String size;
@@ -10,6 +11,7 @@ class FileModel {
 
   FileModel({
     required this.id,
+    required this.folderId,
     required this.name,
     required this.type,
     required this.size,
@@ -43,6 +45,7 @@ class FileModel {
 
     return FileModel(
       id: json['pffid'] ?? 0,
+      folderId: json['fid'] ?? 0,
       name: json['filename'] ?? 'Unnamed File',
       type: getFileType(json['filename'] ?? ''),
       size: formatBytes(json['filesize'] ?? 0, 2),
