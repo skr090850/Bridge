@@ -88,7 +88,8 @@ class ProjectDetailScreenExpansionPannel extends StatefulWidget {
 class _ProjectDetailScreenState
     extends State<ProjectDetailScreenExpansionPannel> {
   late Future<List<Folder>> _foldersFuture;
-
+  int? _projectCoordinatorId;
+  bool _isLoadingProjectDetails = true;
   int? _expandedFolderId;
   List<FileModel> _currentFiles = [];
   bool _isLoadingFiles = false;
@@ -100,95 +101,142 @@ class _ProjectDetailScreenState
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
     _foldersFuture = _fetchFolders(widget.projectId);
   }
 
-void _showUserLogsDrawer() {
-  showModalBottomSheet(
-    context: context,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (context) {
-      final List<Color> avatarColors = [
-        Colors.blue, Colors.green, Colors.red, Colors.orange, 
-        Colors.purple, Colors.teal, Colors.pink, Colors.indigo
-      ];
+  Future<void> _loadInitialData() async {
+    try {
+      await _fetchProjectDetails();
+      _foldersFuture = _fetchFolders(widget.projectId);
+    } catch (e) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingProjectDetails = false;
+        });
+      }
+    }
+  }
 
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
+  Future<void> _fetchProjectDetails() async {
+    final response = await http.get(
+      Uri.parse(
+        'http://183.82.115.221/Bridge/BridgeApi/api/Template/getproject?projid=${widget.projectId}',
+      ),
+    );
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (mounted) {
+        setState(() {
+          _projectCoordinatorId = data['coordinaterid'];
+        });
+      }
+    } else {
+      throw Exception('Failed to load project details');
+    }
+  }
+
+  void _showUserLogsDrawer() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        final List<Color> avatarColors = [
+          Colors.blue,
+          Colors.green,
+          Colors.red,
+          Colors.orange,
+          Colors.purple,
+          Colors.teal,
+          Colors.pink,
+          Colors.indigo,
+        ];
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Select a Member to View Logs',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 16),
+              Text(
+                'Select a Member to View Logs',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
 
-            Flexible(
-              child: FutureBuilder<List<ProjectMember>>(
-                future: _fetchProjectMembers(widget.projectId),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
-                  }
-                  final members = snapshot.data!;
-                  
-                  return ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: members.length,
-                    itemBuilder: (context, index) {
-                      final member = members[index];
-                      final color = avatarColors[member.name.hashCode % avatarColors.length];
+              Flexible(
+                child: FutureBuilder<List<ProjectMember>>(
+                  future: _fetchProjectMembers(widget.projectId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
+                    final members = snapshot.data!;
 
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                        leading: CircleAvatar(
-                          backgroundColor: color.withOpacity(0.15),
-                          foregroundColor: color,
-                          child: const Icon(
-                            Icons.person,
-                            size: 24,
+                    return ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: members.length,
+                      itemBuilder: (context, index) {
+                        final member = members[index];
+                        final color =
+                            avatarColors[member.name.hashCode %
+                                avatarColors.length];
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8.0,
+                            vertical: 4.0,
                           ),
-                          // child: Text(
-                          //   member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
-                          //   style: const TextStyle(fontWeight: FontWeight.bold),
-                          // ),
-                        ),
-                        title: Text(member.name),
-                        trailing: Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey.shade400),
-                        onTap: () {
-                          Navigator.pop(context); 
-                          _showUserActivityPopup(member.id, member.name);
-                        },
-                      );
-                    },
-                    separatorBuilder: (context, index) {
-                      return const Divider(height: 1);
-                    },
-                  );
-                },
+                          leading: CircleAvatar(
+                            backgroundColor: color.withOpacity(0.15),
+                            foregroundColor: color,
+                            child: const Icon(Icons.person, size: 24),
+                            // child: Text(
+                            //   member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
+                            //   style: const TextStyle(fontWeight: FontWeight.bold),
+                            // ),
+                          ),
+                          title: Text(member.name),
+                          trailing: Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: Colors.grey.shade400,
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _showUserActivityPopup(member.id, member.name);
+                          },
+                        );
+                      },
+                      separatorBuilder: (context, index) {
+                        return const Divider(height: 1);
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   void _showUserActivityPopup(int memberId, String memberName) {
     showDialog(
@@ -988,6 +1036,8 @@ void _showUserLogsDrawer() {
 
   @override
   Widget build(BuildContext context) {
+    final bool canViewLogs =
+        (widget.userId == 1000 || widget.userId == _projectCoordinatorId);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.projectTitle),
@@ -997,11 +1047,12 @@ void _showUserLogsDrawer() {
             onPressed: _showSendEmailDialog,
             tooltip: 'Send Email',
           ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: _showUserLogsDrawer,
-            tooltip: 'User Logs',
-          ),
+          if (canViewLogs)
+            IconButton(
+              icon: const Icon(Icons.history),
+              onPressed: _showUserLogsDrawer,
+              tooltip: 'User Logs',
+            ),
           if (_expandedFolderId != null)
             IconButton(
               icon: const Icon(Icons.upload_file_outlined),
@@ -1010,7 +1061,10 @@ void _showUserLogsDrawer() {
             ),
         ],
       ),
-      body: _buildFoldersAndFilesList(),
+      // body: _buildFoldersAndFilesList(),
+      body: _isLoadingProjectDetails
+          ? const Center(child: CircularProgressIndicator())
+          : _buildFoldersAndFilesList(),
     );
   }
 
@@ -1339,7 +1393,11 @@ class _UserActivityLogState extends State<UserActivityLog> {
                           children: [
                             Text(
                               log.fileName,
-                              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Colors.black,fontWeight: FontWeight.bold)
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -1350,8 +1408,9 @@ class _UserActivityLogState extends State<UserActivityLog> {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      Text('Page: ${log.lastPage}',
-                      style: Theme.of(context).textTheme.labelMedium
+                      Text(
+                        'Page: ${log.lastPage}',
+                        style: Theme.of(context).textTheme.labelMedium,
                       ),
                     ],
                   ),
