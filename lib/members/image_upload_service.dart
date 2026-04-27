@@ -1,9 +1,10 @@
 import 'dart:io';
+import 'package:bridge/Server/server_url.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
 class ImageUploadService {
-  static const String _baseUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/PostUserImage';
+  static String _baseUrl = '${baseUrl}Bridge/PostUserImage';
 
   Future<bool> uploadImage({
     required File imageFile,

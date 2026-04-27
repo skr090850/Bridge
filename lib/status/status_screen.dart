@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'status_model.dart';
 import '../projects/project_detail_screen.dart';
+import 'package:bridge/Server/server_url.dart';
 
 class StatusScreen extends StatefulWidget {
   const StatusScreen({super.key});
@@ -34,8 +35,8 @@ class _StatusScreenState extends State<StatusScreen> {
   }
 
   Future<List<StatusModel>> _fetchProjectStatus({required bool isArchived}) async {
-    const apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
+    String apiUrl =
+        '${baseUrl}Template/Myprojects';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),

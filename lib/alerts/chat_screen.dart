@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -31,7 +32,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<List<ChatMessage>> _fetchMessages() async {
         final url = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetChatMessages?fromId=${widget.currentUserId}&toId=${widget.chatPartnerId}');
+        '${baseUrl}bridge/GetChatMessages?fromId=${widget.currentUserId}&toId=${widget.chatPartnerId}');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -57,7 +58,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final messageText = _messageController.text;
     _messageController.clear();
 
-    final url = Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/bridge/SendMessage');
+    final url = Uri.parse('${baseUrl}bridge/SendMessage');
     try {
       await http.post(
         url,

@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -30,8 +31,8 @@ class _HelpdeskScreenState extends State<HelpdeskScreen> {
       _message = ''; 
     });
 
-    const apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
+    String apiUrl =
+        '${baseUrl}Template/Myprojects';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),

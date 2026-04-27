@@ -1,0 +1,1 @@
+String baseUrl = "http://183.82.115.221/Bridge/BridgeApi/api/";

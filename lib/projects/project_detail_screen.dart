@@ -24,6 +24,7 @@ import 'viewers/image_viewer_screen.dart';
 import 'viewers/xlsx_viewer_screen.dart';
 import 'viewers/epub_viewer_screen_copy_withzoom.dart';
 import 'viewers/epub_viewer_withoutZoom.dart';
+import 'package:bridge/Server/server_url.dart';
 
 class MultipartRequestWithProgress extends http.MultipartRequest {
   final void Function(int bytes, int totalBytes) onProgress;
@@ -86,7 +87,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Future<Project> _fetchProjectDetails(int projectId) async {
     final String apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/getproject?projid=$projectId';
+        '${baseUrl}Template/getproject?projid=$projectId';
     final response = await http.get(Uri.parse(apiUrl));
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);
@@ -101,7 +102,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId';
+        '${baseUrl}Template/GetprojFolders?tid=1&projid=$projectId';
     final response = await http.get(Uri.parse(apiUrl));
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);
@@ -114,7 +115,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Future<List<FileModel>> _fetchFiles(int projectId, int folderId) async {
     final String apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=$projectId';
+        '${baseUrl}Bridge/files?_projid=$projectId';
     final response = await http.get(Uri.parse(apiUrl));
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);
@@ -129,7 +130,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
   Future<List<ProjectMember>> _fetchProjectMembers(int projectId) async {
     final response = await http.get(Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/template/getmemberAssainersList?id=$projectId'));
+        '${baseUrl}template/getmemberAssainersList?id=$projectId'));
     if (response.statusCode == 200) {
       final List<dynamic> data = json.decode(response.body);
       return data.map((json) => ProjectMember.fromJson(json)).toList();
@@ -145,7 +146,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
     try {
       final url = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId',
+        '${baseUrl}Bridge/GetpdfData?id=$fileId',
       );
       final response = await http.get(url);
       if (response.statusCode != 200)
@@ -179,7 +180,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     if (officeExtensions.contains(extension)) {
       final fileUrl =
-          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
+          '${baseUrl}Bridge/GetpdfData?id=$fileId';
       final viewerUrl =
           'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
       Navigator.push(
@@ -249,7 +250,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               });
 
               var uri = Uri.parse(
-                'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/PostUserImage',
+                '${baseUrl}Bridge/PostUserImage',
               );
               final request = MultipartRequestWithProgress(
                 'POST',
@@ -522,7 +523,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 };
 
                 final response = await http.post(
-                  Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/template/AddMailalerts'),
+                  Uri.parse('${baseUrl}template/AddMailalerts'),
                   headers: {'Content-Type': 'application/json'},
                   body: json.encode(body),
                 );

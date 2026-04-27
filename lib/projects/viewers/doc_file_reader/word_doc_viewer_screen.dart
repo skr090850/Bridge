@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:bridge/Server/server_url.dart';
 
 import 'document_model.dart';
 import 'docx_parser.dart';
@@ -243,7 +244,7 @@ class _DocViewerScreenState extends State<WordDocViewerScreen> {
 
     try {
       final uri = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}',
+        '${baseUrl}bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}',
       );
       final response = await http.get(uri);
 
@@ -273,7 +274,7 @@ class _DocViewerScreenState extends State<WordDocViewerScreen> {
     if (widget.userId == 0 || widget.fileId == 0) return;
     try {
       await http.post(
-        Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/Bridge/UpdateFileReadingStatus'),
+        Uri.parse('${baseUrl}Bridge/UpdateFileReadingStatus'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'uid': widget.userId,

@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:bridge/projects/project_detail_screen_expansion_pannel.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -31,7 +32,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
 
   Future<Member> _fetchMemberDetails(int memberId) async {
     final response = await http.get(Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/ViewMember?id=$memberId'));
+        '${baseUrl}bridge/ViewMember?id=$memberId'));
 
     if (response.statusCode == 200) {
       final responseData = json.decode(response.body);

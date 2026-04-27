@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -27,7 +28,7 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
 
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId';
+        '${baseUrl}Template/GetprojFolders?tid=1&projid=$projectId';
     final response = await http.get(Uri.parse(apiUrl));
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:bridge/Server/server_url.dart';
 
 // Drawing classes from previous implementation
 class DrawingPath {
@@ -99,7 +100,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       return;
     }
     try {
-      final uri = Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}');
+      final uri = Uri.parse('${baseUrl}bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}');
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -123,7 +124,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (widget.userId == 0 || widget.fileId == 0) return;
     try {
       await http.post(
-        Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/Bridge/UpdateFileReadingStatus'),
+        Uri.parse('${baseUrl}Bridge/UpdateFileReadingStatus'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'uid': widget.userId, 'fileId': widget.fileId, 'currentPage': pageIndex}),
       );

@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -35,7 +36,7 @@ class _MembersScreenState extends State<MembersScreen> {
 
   Future<List<Member>> _fetchMembers(int userId) async {
     final url = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetMemberList/?memtype=company&id=$userId');
+        '${baseUrl}bridge/GetMemberList/?memtype=company&id=$userId');
 
     try {
       final response = await http.get(url);

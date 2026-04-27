@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 import 'package:bridge/projects/viewers/search_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bridge/Server/server_url.dart';
 
 class DrawingPath {
   final List<Offset?> points;
@@ -227,7 +228,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
     if (_book == null) return;
     try {
       final uri = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}',
+        '${baseUrl}bridge/GetFileReadingStatus?uid=${widget.userId}&fileid=${widget.fileId}',
       );
 
       final response = await http.get(uri);
@@ -260,7 +261,7 @@ class _EpubViewerScreenCopyState extends State<EpubViewerScreenCopy> {
   void _updateProgressOnServer(int pageIndex) async {
   try {
     final response = await http.post(
-      Uri.parse('http://183.82.115.221/Bridge/BridgeApi/api/Bridge/UpdateFileReadingStatus'),
+      Uri.parse('${baseUrl}Bridge/UpdateFileReadingStatus'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
         'uid': widget.userId,

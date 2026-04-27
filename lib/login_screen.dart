@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -23,8 +24,8 @@ Future<void> _login() async {
     _isLoading = true;
   });
 
-  const String apiUrl =
-      'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/getLogin';
+  String apiUrl =
+      '${baseUrl}Bridge/getLogin';
   try {
     final response = await http.post(
       Uri.parse(apiUrl),

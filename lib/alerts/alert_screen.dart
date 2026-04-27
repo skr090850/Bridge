@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -26,7 +27,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   Future<List<Alert>> _fetchAlerts(int userId) async {
     final url = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetMemberList/?memtype=company&id=$userId');
+        '${baseUrl}bridge/GetMemberList/?memtype=company&id=$userId');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {

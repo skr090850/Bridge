@@ -1,3 +1,4 @@
+import 'package:bridge/Server/server_url.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -122,7 +123,7 @@ class _ProjectDetailScreenState
   Future<void> _fetchProjectDetails() async {
     final response = await http.get(
       Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/getproject?projid=${widget.projectId}',
+        '${baseUrl}Template/getproject?projid=${widget.projectId}',
       ),
     );
     if (response.statusCode == 200) {
@@ -264,7 +265,7 @@ class _ProjectDetailScreenState
 
   Future<List<Folder>> _fetchFolders(int projectId) async {
     final String apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId';
+        '${baseUrl}Template/GetprojFolders?tid=1&projid=$projectId';
     final response = await http.get(Uri.parse(apiUrl));
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);
@@ -283,7 +284,7 @@ class _ProjectDetailScreenState
 
   Future<List<FileModel>> _fetchFiles(int projectId, int folderId) async {
     final String apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=$projectId';
+        '${baseUrl}Bridge/files?_projid=$projectId';
     final response = await http.get(Uri.parse(apiUrl));
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);
@@ -300,7 +301,7 @@ class _ProjectDetailScreenState
   Future<List<ProjectMember>> _fetchProjectMembers(int projectId) async {
     final response = await http.get(
       Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/template/getmemberAssainersList?id=$projectId',
+        '${baseUrl}template/getmemberAssainersList?id=$projectId',
       ),
     );
     if (response.statusCode == 200) {
@@ -353,7 +354,7 @@ class _ProjectDetailScreenState
     });
     try {
       final url = Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId',
+        '${baseUrl}Bridge/GetpdfData?id=$fileId',
       );
       final response = await http.get(url);
       if (response.statusCode != 200) {
@@ -391,7 +392,7 @@ class _ProjectDetailScreenState
 
     if (officeExtensions.contains(extension)) {
       final fileUrl =
-          'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/GetpdfData?id=$fileId';
+          '${baseUrl}Bridge/GetpdfData?id=$fileId';
       final viewerUrl =
           'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
       Navigator.push(
@@ -494,7 +495,7 @@ class _ProjectDetailScreenState
               });
 
               var uri = Uri.parse(
-                'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/PostUserImage',
+                '${baseUrl}Bridge/PostUserImage',
               );
               final request = MultipartRequestWithProgress(
                 'POST',
@@ -767,7 +768,7 @@ class _ProjectDetailScreenState
 
                 final response = await http.post(
                   Uri.parse(
-                    'http://183.82.115.221/Bridge/BridgeApi/api/template/AddMailalerts',
+                    '${baseUrl}template/AddMailalerts',
                   ),
                   headers: {'Content-Type': 'application/json'},
                   body: json.encode(body),
@@ -1276,7 +1277,7 @@ class _UserActivityLogState extends State<UserActivityLog> {
     // 1. Sirf current project ke folders fetch karein
     final foldersResponse = await http.get(
       Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/GetprojFolders?tid=1&projid=$projectId',
+        '${baseUrl}Template/GetprojFolders?tid=1&projid=$projectId',
       ),
     );
     if (foldersResponse.statusCode != 200)
@@ -1293,7 +1294,7 @@ class _UserActivityLogState extends State<UserActivityLog> {
     // 2. Sirf current project ki files fetch karein
     final filesResponse = await http.get(
       Uri.parse(
-        'http://183.82.115.221/Bridge/BridgeApi/api/Bridge/files?_projid=$projectId',
+        '${baseUrl}Bridge/files?_projid=$projectId',
       ),
     );
     if (filesResponse.statusCode != 200)
@@ -1306,7 +1307,7 @@ class _UserActivityLogState extends State<UserActivityLog> {
       FileModel file = FileModel.fromJson(fileJson);
       final statusResponse = await http.get(
         Uri.parse(
-          'http://183.82.115.221/Bridge/BridgeApi/api/bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}',
+          '${baseUrl}bridge/GetFileReadingStatus?uid=$userId&fileid=${file.id}',
         ),
       );
 

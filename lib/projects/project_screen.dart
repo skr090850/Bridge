@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'model/project_model.dart';
 import 'project_detail_screen.dart';
 import 'project_detail_screen_expansion_pannel.dart';
+import 'package:bridge/Server/server_url.dart';
 
 class ProjectScreen extends StatefulWidget {
   const ProjectScreen({super.key});
@@ -36,11 +37,11 @@ Future<List<Project>> _fetchProjects(int userId) async {
   String apiUrl;
   
   if (userId == 1000) {
-    apiUrl = 'http://183.82.115.221/Bridge/BridgeApi/api/Template/Myprojects';
+    apiUrl = '${baseUrl}Template/Myprojects';
   } 
   else {
     apiUrl =
-        'http://183.82.115.221/Bridge/BridgeApi/api/Template/myprocjectuser';
+        '${baseUrl}Template/myprocjectuser';
   }
 
   try {
