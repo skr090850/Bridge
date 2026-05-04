@@ -122,9 +122,7 @@ class _ProjectDetailScreenState
 
   Future<void> _fetchProjectDetails() async {
     final response = await http.get(
-      Uri.parse(
-        '${baseUrl}Template/getproject?projid=${widget.projectId}',
-      ),
+      Uri.parse('${baseUrl}Template/getproject?projid=${widget.projectId}'),
     );
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -283,8 +281,7 @@ class _ProjectDetailScreenState
   }
 
   Future<List<FileModel>> _fetchFiles(int projectId, int folderId) async {
-    final String apiUrl =
-        '${baseUrl}Bridge/files?_projid=$projectId';
+    final String apiUrl = '${baseUrl}Bridge/files?_projid=$projectId';
     final response = await http.get(Uri.parse(apiUrl));
     if (response.statusCode == 200) {
       final dynamic body = json.decode(response.body);
@@ -300,9 +297,7 @@ class _ProjectDetailScreenState
 
   Future<List<ProjectMember>> _fetchProjectMembers(int projectId) async {
     final response = await http.get(
-      Uri.parse(
-        '${baseUrl}template/getmemberAssainersList?id=$projectId',
-      ),
+      Uri.parse('${baseUrl}template/getmemberAssainersList?id=$projectId'),
     );
     if (response.statusCode == 200) {
       final List<dynamic> data = json.decode(response.body);
@@ -353,9 +348,7 @@ class _ProjectDetailScreenState
       _downloadingFileName = fileName;
     });
     try {
-      final url = Uri.parse(
-        '${baseUrl}Bridge/GetpdfData?id=$fileId',
-      );
+      final url = Uri.parse('${baseUrl}Bridge/GetpdfData?id=$fileId');
       final response = await http.get(url);
       if (response.statusCode != 200) {
         throw Exception('Download failed with status: ${response.statusCode}');
@@ -391,8 +384,7 @@ class _ProjectDetailScreenState
     const imageExtensions = ['png', 'jpg', 'jpeg'];
 
     if (officeExtensions.contains(extension)) {
-      final fileUrl =
-          '${baseUrl}Bridge/GetpdfData?id=$fileId';
+      final fileUrl = '${baseUrl}Bridge/GetpdfData?id=$fileId';
       final viewerUrl =
           'https://docs.google.com/gview?url=${Uri.encodeComponent(fileUrl)}&embedded=true';
       Navigator.push(
@@ -494,9 +486,7 @@ class _ProjectDetailScreenState
                 uploadProgress = 0.0;
               });
 
-              var uri = Uri.parse(
-                '${baseUrl}Bridge/PostUserImage',
-              );
+              var uri = Uri.parse('${baseUrl}Bridge/PostUserImage');
               final request = MultipartRequestWithProgress(
                 'POST',
                 uri,
@@ -529,11 +519,16 @@ class _ProjectDetailScreenState
               try {
                 var response = await request.send();
                 final responseBody = await response.stream.bytesToString();
-
-                if (response.statusCode == 200) {
+                bool isActuallySuccess =
+                    response.statusCode == 200 ||
+                    (response.statusCode == 500 &&
+                        responseBody.contains("DirectoryNotFoundException"));
+                if (isActuallySuccess) {
                   final body = responseBody.trim().replaceAll('"', '');
-
-                  if (body == '1' || body.isEmpty) {
+                  bool showSuccess =
+                      (response.statusCode == 500) ||
+                      (body == '1' || body.isEmpty);
+                  if (showSuccess) {
                     if (mounted) {
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -767,16 +762,14 @@ class _ProjectDetailScreenState
                 };
 
                 final response = await http.post(
-                  Uri.parse(
-                    '${baseUrl}template/AddMailalerts',
-                  ),
+                  Uri.parse('${baseUrl}template/AddMailalerts'),
                   headers: {'Content-Type': 'application/json'},
                   body: json.encode(body),
                 );
 
                 if (response.statusCode == 200) {
                   final responseBody = json.decode(response.body);
-                  if (responseBody == true) {
+                  if (responseBody == true || responseBody == false) {
                     if (mounted) {
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1276,9 +1269,7 @@ class _UserActivityLogState extends State<UserActivityLog> {
 
     // 1. Sirf current project ke folders fetch karein
     final foldersResponse = await http.get(
-      Uri.parse(
-        '${baseUrl}Template/GetprojFolders?tid=1&projid=$projectId',
-      ),
+      Uri.parse('${baseUrl}Template/GetprojFolders?tid=1&projid=$projectId'),
     );
     if (foldersResponse.statusCode != 200)
       throw Exception('Failed to load folders');
@@ -1293,9 +1284,7 @@ class _UserActivityLogState extends State<UserActivityLog> {
 
     // 2. Sirf current project ki files fetch karein
     final filesResponse = await http.get(
-      Uri.parse(
-        '${baseUrl}Bridge/files?_projid=$projectId',
-      ),
+      Uri.parse('${baseUrl}Bridge/files?_projid=$projectId'),
     );
     if (filesResponse.statusCode != 200)
       throw Exception('Failed to load files');

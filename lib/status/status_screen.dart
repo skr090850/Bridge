@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'status_model.dart';
-import '../projects/project_detail_screen.dart';
+import '../projects/project_detail_screen_expansion_pannel.dart';
 import 'package:bridge/Server/server_url.dart';
 
 class StatusScreen extends StatefulWidget {
@@ -14,18 +14,27 @@ class StatusScreen extends StatefulWidget {
 
 class _StatusScreenState extends State<StatusScreen> {
   late Future<List<StatusModel>> _statusFuture;
+  int? _userId;
 
   @override
-  void initState() {
-    super.initState();
-    _statusFuture = _fetchAllStatus();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final arguments =
+        ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+    if (arguments != null && arguments.containsKey('userId')) {
+      _userId = arguments['userId'];
+      _statusFuture = _fetchAllStatus(_userId!);
+    } else {
+      _userId = null;
+      _statusFuture = Future.error('Authentication Error: User ID not found.');
+    }
   }
 
-  Future<List<StatusModel>> _fetchAllStatus() async {
+  Future<List<StatusModel>> _fetchAllStatus(int userId) async {
     try {
       final results = await Future.wait([
-        _fetchProjectStatus(isArchived: false),
-        _fetchProjectStatus(isArchived: true),
+        _fetchProjectStatus(userId: userId, isArchived: false),
+        _fetchProjectStatus(userId: userId, isArchived: true),
       ]);
       return [...results[0], ...results[1]];
     } catch (e) {
@@ -34,14 +43,16 @@ class _StatusScreenState extends State<StatusScreen> {
     }
   }
 
-  Future<List<StatusModel>> _fetchProjectStatus({required bool isArchived}) async {
-    String apiUrl =
-        '${baseUrl}Template/Myprojects';
+  Future<List<StatusModel>> _fetchProjectStatus({
+    required int userId,
+    required bool isArchived,
+  }) async {
+    String apiUrl = '${baseUrl}Template/Myprojects';
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'uid': 1000, 'skip': 0, 'take': 20, 'srch': ''}),
+        body: json.encode({'uid': userId, 'skip': 0, 'take': 20, 'srch': ''}),
       );
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
@@ -60,14 +71,20 @@ class _StatusScreenState extends State<StatusScreen> {
         }
 
         if (isArchived) {
-           return projectsJson.skip(3).map((json) => StatusModel.fromJson(json, isArchived: true)).toList();
+          return projectsJson
+              .skip(3)
+              .map((json) => StatusModel.fromJson(json, isArchived: true))
+              .toList();
         } else {
-           return projectsJson.take(3).map((json) => StatusModel.fromJson(json, isArchived: false)).toList();
+          return projectsJson
+              .take(3)
+              .map((json) => StatusModel.fromJson(json, isArchived: false))
+              .toList();
         }
-
       } else {
         throw Exception(
-            'Failed to load status. Status code: ${response.statusCode}');
+          'Failed to load status. Status code: ${response.statusCode}',
+        );
       }
     } catch (e) {
       debugPrint("Error fetching status: $e");
@@ -78,9 +95,7 @@ class _StatusScreenState extends State<StatusScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Status'),
-      ),
+      appBar: AppBar(title: const Text('Status')),
       body: Column(
         children: [
           _buildLegendHeader(),
@@ -94,8 +109,11 @@ class _StatusScreenState extends State<StatusScreen> {
                 }
                 if (snapshot.hasError) {
                   return Center(
-                      child: Text("Error: ${snapshot.error}",
-                          textAlign: TextAlign.center));
+                    child: Text(
+                      "Error: ${snapshot.error}",
+                      textAlign: TextAlign.center,
+                    ),
+                  );
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(child: Text("No projects found."));
@@ -105,21 +123,28 @@ class _StatusScreenState extends State<StatusScreen> {
 
                 return ListView.separated(
                   itemCount: allProjects.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final item = allProjects[index];
                     return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      title: Text(item.projectName,
-                          style: const TextStyle(fontWeight: FontWeight.w500)),
-                      subtitle: Text(item.company,
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                      ),
+                      title: Text(
+                        item.projectName,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      subtitle: Text(
+                        item.company,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            width: 12, 
-                            height: 12, 
+                            width: 12,
+                            height: 12,
                             color: item.isArchived ? Colors.grey : Colors.red,
                           ),
                           const SizedBox(width: 8),
@@ -127,7 +152,9 @@ class _StatusScreenState extends State<StatusScreen> {
                             width: 40,
                             child: Text(
                               '${item.statusPercent}%',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                               textAlign: TextAlign.right,
                             ),
                           ),
@@ -137,10 +164,12 @@ class _StatusScreenState extends State<StatusScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ProjectDetailScreen(
-                              projectId: item.projectId,
-                              projectTitle: item.projectName,
-                            ),
+                            builder: (context) =>
+                                ProjectDetailScreenExpansionPannel(
+                                  projectId: item.projectId,
+                                  projectTitle: item.projectName,
+                                  userId: _userId!,
+                                ),
                           ),
                         );
                       },
@@ -181,11 +210,16 @@ class _StatusScreenState extends State<StatusScreen> {
       child: const Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('Project', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          Text('Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(
+            'Project',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          Text(
+            'Status',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
         ],
       ),
     );
   }
 }
-
