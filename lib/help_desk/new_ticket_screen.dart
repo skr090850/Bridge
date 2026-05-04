@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../projects/model/project_model.dart';
 import '../projects/model/folder_model.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class NewTicketScreen extends StatefulWidget {
   final Project project;
@@ -19,11 +21,25 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  XFile? _pickedImage;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _foldersFuture = _fetchFolders(widget.project.projectId);
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final XFile? selected = await _picker.pickImage(
+      source: source,
+      imageQuality: 80, // Size manage karne ke liye
+    );
+    if (selected != null) {
+      setState(() {
+        _pickedImage = selected;
+      });
+    }
   }
 
   Future<List<Folder>> _fetchFolders(int projectId) async {
@@ -38,16 +54,18 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
       throw Exception('Failed to load folders');
     }
   }
-  
-  void _submitTicket(){
-    if(_formKey.currentState!.validate()){
+
+  void _submitTicket() {
+    if (_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ticket submitted successfully! (DEMO)'), backgroundColor: Colors.green,)
+        const SnackBar(
+          content: Text('Ticket submitted successfully!'),
+          backgroundColor: Colors.green,
+        ),
       );
       Navigator.pop(context);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -55,8 +73,14 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
       appBar: AppBar(
         title: const Text('New Ticket'),
         actions: [
-          IconButton(onPressed: (){}, icon: const Icon(Icons.camera_alt_outlined)),
-          IconButton(onPressed: (){}, icon: const Icon(Icons.image_outlined)),
+          IconButton(
+            onPressed: () => _pickImage(ImageSource.camera),
+            icon: const Icon(Icons.camera_alt_outlined),
+          ),
+          IconButton(
+            onPressed: () => _pickImage(ImageSource.gallery),
+            icon: const Icon(Icons.image_outlined),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -66,35 +90,49 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Selected Project', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text('${widget.project.title}\nCustomer ID: ${widget.project.projectId}'),
+              const Text(
+                'Selected Project',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${widget.project.title}\nCustomer ID: ${widget.project.projectId}',
+              ),
               const SizedBox(height: 16),
-              
-              const Text('Select Folder', style: TextStyle(fontWeight: FontWeight.bold)),
+
+              const Text(
+                'Select Folder',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               FutureBuilder<List<Folder>>(
                 future: _foldersFuture,
-                builder: (context, snapshot){
-                   if (snapshot.connectionState == ConnectionState.waiting) {
-                     return const Center(child: CircularProgressIndicator());
-                   }
-                   if(snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty){
-                     return const Text('Could not load folders.');
-                   }
-                   final folders = snapshot.data!;
-                   return DropdownButtonFormField<Folder>(
-                     value: _selectedFolder,
-                     hint: const Text('Select a folder'),
-                     isExpanded: true,
-                     items: folders.map((folder) {
-                       return DropdownMenuItem(value: folder, child: Text(folder.name));
-                     }).toList(),
-                     onChanged: (value){
-                       setState(() {
-                         _selectedFolder = value;
-                       });
-                     },
-                     validator: (value) => value == null ? 'Please select a folder' : null,
-                   );
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError ||
+                      !snapshot.hasData ||
+                      snapshot.data!.isEmpty) {
+                    return const Text('Could not load folders.');
+                  }
+                  final folders = snapshot.data!;
+                  return DropdownButtonFormField<Folder>(
+                    value: _selectedFolder,
+                    hint: const Text('Select a folder'),
+                    isExpanded: true,
+                    items: folders.map((folder) {
+                      return DropdownMenuItem(
+                        value: folder,
+                        child: Text(folder.name),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedFolder = value;
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Please select a folder' : null,
+                  );
                 },
               ),
               const SizedBox(height: 16),
@@ -105,10 +143,11 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
                   labelText: 'Subject',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) => value!.isEmpty ? 'Please enter a subject' : null,
+                validator: (value) =>
+                    value!.isEmpty ? 'Please enter a subject' : null,
               ),
               const SizedBox(height: 16),
-              
+
               TextFormField(
                 controller: _descriptionController,
                 decoration: const InputDecoration(
@@ -117,17 +156,46 @@ class _NewTicketScreenState extends State<NewTicketScreen> {
                   alignLabelWithHint: true,
                 ),
                 maxLines: 5,
-                 validator: (value) => value!.isEmpty ? 'Please enter a description' : null,
+                validator: (value) =>
+                    value!.isEmpty ? 'Please enter a description' : null,
               ),
               const SizedBox(height: 24),
-              
+              if (_pickedImage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(_pickedImage!.path),
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        right: 5,
+                        top: 5,
+                        child: CircleAvatar(
+                          backgroundColor: Colors.red,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: () =>
+                                setState(() => _pickedImage = null),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _submitTicket,
                   child: const Text('SUBMIT'),
                 ),
-              )
+              ),
             ],
           ),
         ),
